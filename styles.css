@@ -274,6 +274,66 @@ button:active {
     background: linear-gradient(180deg, #ff93d0, #ff5a8b);
 }
 
+#help-btn {
+    background: linear-gradient(180deg, #9dff9a, #3ccd74);
+}
+
+.info-panel {
+    position: relative;
+    z-index: 1;
+    width: min(860px, 100%);
+    padding: 18px 20px;
+    border: 4px solid #152a23;
+    background:
+        linear-gradient(180deg, rgba(94, 255, 155, 0.18), rgba(12, 28, 25, 0.94)),
+        linear-gradient(135deg, rgba(17, 45, 38, 0.96), rgba(8, 14, 18, 0.96));
+    box-shadow:
+        0 0 0 4px rgba(98, 244, 255, 0.14),
+        0 16px 30px rgba(0, 0, 0, 0.32);
+}
+
+.info-panel h2,
+.info-panel h3,
+.info-panel p {
+    margin: 0;
+}
+
+.info-panel h2 {
+    font-size: clamp(20px, 3vw, 28px);
+    color: var(--hud-yellow);
+    text-shadow: 0 0 10px rgba(255, 224, 102, 0.24);
+}
+
+.info-panel > p {
+    margin-top: 10px;
+    line-height: 1.6;
+    color: rgba(248, 241, 215, 0.92);
+}
+
+.info-block {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 2px solid rgba(98, 244, 255, 0.28);
+    background: rgba(4, 10, 14, 0.5);
+}
+
+.info-block h3 {
+    margin-bottom: 6px;
+    color: var(--hud-cyan);
+    font-size: 16px;
+    letter-spacing: 1px;
+}
+
+.info-block p {
+    line-height: 1.6;
+    color: rgba(248, 241, 215, 0.9);
+}
+
+.mobile-block {
+    border-color: rgba(255, 224, 102, 0.42);
+    box-shadow: inset 0 0 0 1px rgba(255, 224, 102, 0.18);
+}
+
 @media (max-width: 900px) {
     #game-container {
         padding-top: 14px;
@@ -314,6 +374,10 @@ button:active {
     .screen-shell {
         width: min(100%, calc((100svh - 312px) * 1.3333));
         padding: 8px;
+    }
+
+    .info-panel {
+        padding: 16px 14px;
     }
 
     button {

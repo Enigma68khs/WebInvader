@@ -5,7 +5,17 @@ const stageEl = document.getElementById('stage');
 const restartBtn = document.getElementById('restart-btn');
 const pauseBtn = document.getElementById('pause-btn');
 const musicBtn = document.getElementById('music-btn');
+const helpBtn = document.getElementById('help-btn');
 const languageBtn = document.getElementById('language-btn');
+const helpPanel = document.getElementById('help-panel');
+const helpTitleEl = document.getElementById('help-title');
+const helpIntroEl = document.getElementById('help-intro');
+const helpMobileTitleEl = document.getElementById('help-mobile-title');
+const helpMobileBodyEl = document.getElementById('help-mobile-body');
+const helpDesktopTitleEl = document.getElementById('help-desktop-title');
+const helpDesktopBodyEl = document.getElementById('help-desktop-body');
+const helpTipTitleEl = document.getElementById('help-tip-title');
+const helpTipBodyEl = document.getElementById('help-tip-body');
 const screenShell = document.querySelector('.screen-shell');
 const marqueeTitleEl = document.querySelector('.marquee-title');
 const marqueeSubtitleEl = document.querySelector('.marquee-subtitle');
@@ -24,6 +34,7 @@ let musicOn = false;
 let musicTimer = null;
 let musicStep = 0;
 let currentLanguage = 'ko';
+let helpOpen = false;
 let moveTouchId = null;
 let playerExplosion = null;
 
@@ -73,11 +84,20 @@ const translations = {
         restart: '다시하기',
         musicOn: '음악 켜기',
         musicOff: '음악 끄기',
+        help: '사용방법',
         gameOver: '게임 오버',
         victory: '승리!',
         restartHint: '다시하기를 눌러주세요',
         stageCanvas: '스테이지',
-        languageToggle: '中文'
+        languageToggle: '中文',
+        helpTitle: '사용방법',
+        helpIntro: '방향키와 스페이스바 또는 터치 조작으로 모든 적을 물리치세요.',
+        helpMobileTitle: '핸드폰 조작',
+        helpMobileBody: '화면을 누른 채 좌우로 움직이면 우주선이 따라 움직입니다. 그 상태에서 다른 손가락으로 탭하면 총알이 발사됩니다.',
+        helpDesktopTitle: '키보드 조작',
+        helpDesktopBody: '왼쪽/오른쪽 방향키로 이동하고 스페이스바로 발사합니다. P 키 또는 일시 정지 버튼으로 멈출 수 있습니다.',
+        helpTipTitle: '플레이 팁',
+        helpTipBody: '총알은 벽과 천장에 튕깁니다. 반사 각도를 활용하면 위쪽이나 가장자리 적도 쉽게 맞출 수 있습니다.'
     },
     zh: {
         documentTitle: '网页入侵者游戏',
@@ -93,13 +113,27 @@ const translations = {
         restart: '重新开始',
         musicOn: '开启音乐',
         musicOff: '关闭音乐',
+        help: '使用方法',
         gameOver: '游戏结束',
         victory: '胜利！',
         restartHint: '请点击重新开始',
         stageCanvas: '关卡',
-        languageToggle: '한국어'
+        languageToggle: '한국어',
+        helpTitle: '使用方法',
+        helpIntro: '使用方向键、空格键或触屏操作，消灭所有敌人。',
+        helpMobileTitle: '手机操作',
+        helpMobileBody: '按住屏幕后左右滑动即可移动飞船。保持按住时，再用另一根手指点一下，就会发射子弹。',
+        helpDesktopTitle: '键盘操作',
+        helpDesktopBody: '使用左右方向键移动，按空格键发射。按 P 键或暂停按钮可以暂停游戏。',
+        helpTipTitle: '游玩提示',
+        helpTipBody: '子弹会在墙壁和顶部反弹。提前计算反弹路线，可以更快击中高处或边缘的敌人。'
     }
 };
+
+function syncHelpPanelVisibility() {
+    helpPanel.hidden = !helpOpen;
+    helpBtn.setAttribute('aria-expanded', String(helpOpen));
+}
 
 function playSound(frequency, duration, type = 'sine') {
     if (audioContext.state === 'suspended') return;
@@ -395,7 +429,17 @@ function syncLanguageUI() {
     pauseBtn.textContent = paused ? text.resume : text.pause;
     restartBtn.textContent = text.restart;
     musicBtn.textContent = musicOn ? text.musicOff : text.musicOn;
+    helpBtn.textContent = text.help;
     languageBtn.textContent = text.languageToggle;
+    helpTitleEl.textContent = text.helpTitle;
+    helpIntroEl.textContent = text.helpIntro;
+    helpMobileTitleEl.textContent = text.helpMobileTitle;
+    helpMobileBodyEl.textContent = text.helpMobileBody;
+    helpDesktopTitleEl.textContent = text.helpDesktopTitle;
+    helpDesktopBodyEl.textContent = text.helpDesktopBody;
+    helpTipTitleEl.textContent = text.helpTipTitle;
+    helpTipBodyEl.textContent = text.helpTipBody;
+    syncHelpPanelVisibility();
 }
 
 function getStageTheme() {
@@ -909,6 +953,11 @@ musicBtn.addEventListener('click', async () => {
     } else {
         stopBackgroundMusic();
     }
+});
+
+helpBtn.addEventListener('click', () => {
+    helpOpen = !helpOpen;
+    syncHelpPanelVisibility();
 });
 
 languageBtn.addEventListener('click', () => {

@@ -31,8 +31,25 @@
             <button id="pause-btn">일시 정지</button>
             <button id="restart-btn">다시하기</button>
             <button id="music-btn">음악 켜기</button>
+            <button id="help-btn" aria-expanded="false" aria-controls="help-panel">사용방법</button>
             <button id="language-btn">中文</button>
         </div>
+        <section id="help-panel" class="info-panel" hidden>
+            <h2 id="help-title">사용방법</h2>
+            <p id="help-intro">방향키와 스페이스바 또는 터치 조작으로 적을 모두 물리치면 됩니다.</p>
+            <div class="info-block mobile-block">
+                <h3 id="help-mobile-title">핸드폰 조작</h3>
+                <p id="help-mobile-body">화면을 누른 채 좌우로 움직이면 우주선이 이동합니다. 다른 손가락으로 한 번 더 탭하면 총알이 발사됩니다.</p>
+            </div>
+            <div class="info-block">
+                <h3 id="help-desktop-title">키보드 조작</h3>
+                <p id="help-desktop-body">왼쪽/오른쪽 방향키로 이동하고 스페이스바로 발사합니다. P 키로 일시 정지할 수 있습니다.</p>
+            </div>
+            <div class="info-block">
+                <h3 id="help-tip-title">플레이 팁</h3>
+                <p id="help-tip-body">총알은 벽과 천장에 튕깁니다. 돌아오는 탄도까지 계산하면 적을 더 빨리 정리할 수 있습니다.</p>
+            </div>
+        </section>
     </div>
     <script src="game.js"></script>
 </body>
