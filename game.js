@@ -23,6 +23,7 @@ let musicOn = false;
 let musicTimer = null;
 let musicStep = 0;
 let currentLanguage = 'ko';
+let moveTouchId = null;
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 ctx.imageSmoothingEnabled = false;
@@ -591,6 +592,62 @@ function createBullet() {
     };
 }
 
+function shootBullet() {
+    if (gameOver || paused) return;
+
+    ensureAudioReady();
+    bullets.push(createBullet());
+    playShootSound();
+}
+
+function getCanvasRelativeX(clientX) {
+    const rect = canvas.getBoundingClientRect();
+    const relativeX = ((clientX - rect.left) / rect.width) * canvas.width;
+    return Math.max(0, Math.min(canvas.width, relativeX));
+}
+
+function movePlayerToClientX(clientX) {
+    const touchX = getCanvasRelativeX(clientX);
+    player.x = Math.max(0, Math.min(canvas.width - player.width, touchX - player.width / 2));
+}
+
+function handleTouchStart(event) {
+    event.preventDefault();
+
+    for (const touch of event.changedTouches) {
+        if (moveTouchId === null) {
+            moveTouchId = touch.identifier;
+            movePlayerToClientX(touch.clientX);
+        } else if (touch.identifier !== moveTouchId) {
+            shootBullet();
+        }
+    }
+}
+
+function handleTouchMove(event) {
+    if (moveTouchId === null) return;
+
+    for (const touch of event.changedTouches) {
+        if (touch.identifier === moveTouchId) {
+            event.preventDefault();
+            movePlayerToClientX(touch.clientX);
+            break;
+        }
+    }
+}
+
+function handleTouchEnd(event) {
+    const moveTouchEnded = Array.from(event.changedTouches).some(touch => touch.identifier === moveTouchId);
+    if (!moveTouchEnded) return;
+
+    const remainingTouch = Array.from(event.touches)[0];
+    moveTouchId = remainingTouch ? remainingTouch.identifier : null;
+
+    if (remainingTouch) {
+        movePlayerToClientX(remainingTouch.clientX);
+    }
+}
+
 function updateBullets() {
     for (let i = bullets.length - 1; i >= 0; i--) {
         const bullet = bullets[i];
@@ -727,9 +784,7 @@ document.addEventListener('keydown', (e) => {
     keys[e.key] = true;
     if (e.key === ' ') {
         e.preventDefault();
-        ensureAudioReady();
-        bullets.push(createBullet());
-        playShootSound();
+        shootBullet();
     }
     if (e.key === 'p' || e.key === 'P') {
         e.preventDefault();
@@ -764,6 +819,11 @@ languageBtn.addEventListener('click', () => {
     syncLanguageUI();
     updateUI();
 });
+
+canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+canvas.addEventListener('touchend', handleTouchEnd);
+canvas.addEventListener('touchcancel', handleTouchEnd);
 
 init();
 gameLoop();
