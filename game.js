@@ -2,9 +2,14 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const stageEl = document.getElementById('stage');
+const stageDownBtn = document.getElementById('stage-down-btn');
+const stageUpBtn = document.getElementById('stage-up-btn');
+const startBtn = document.getElementById('start-btn');
 const restartBtn = document.getElementById('restart-btn');
 const pauseBtn = document.getElementById('pause-btn');
 const musicBtn = document.getElementById('music-btn');
+const rapidFireCheckbox = document.getElementById('rapid-fire-checkbox');
+const rapidFireLabelEl = document.getElementById('rapid-fire-label');
 const helpBtn = document.getElementById('help-btn');
 const languageBtn = document.getElementById('language-btn');
 const helpModal = document.getElementById('help-modal');
@@ -30,9 +35,12 @@ let score = 0;
 let stage = 1;
 let gameOver = false;
 let gameOverReason = null;
+let gameStarted = false;
 let paused = false;
 let keys = {};
-let musicOn = false;
+let musicOn = true;
+let rapidFireEnabled = false;
+let bulletReady = true;
 let musicTimer = null;
 let musicStep = 0;
 let currentLanguage = 'ko';
@@ -82,11 +90,15 @@ const translations = {
         scoreValue: '점수',
         stageLabel: '스테이지',
         stageValue: '스테이지',
+        start: '시작',
+        stageIncreaseLabel: '스테이지 증가',
+        stageDecreaseLabel: '스테이지 감소',
         pause: '일시 정지',
         resume: '재개',
         restart: '다시하기',
         musicOn: '음악 켜기',
         musicOff: '음악 끄기',
+        rapidFire: '연속발사',
         help: '사용방법',
         gameOver: '게임 오버',
         victory: '승리!',
@@ -96,6 +108,7 @@ const translations = {
         closeLabel: '닫기',
         helpTitle: '사용방법',
         helpIntro: '방향키와 스페이스바 또는 터치 조작으로 모든 적을 물리치세요.',
+        startPrompt: '시작 버튼을 눌러 선택한 스테이지에서 게임을 시작하세요.',
         helpMobileTitle: '핸드폰 조작',
         helpMobileBody: '화면을 누른 채 좌우로 움직이면 우주선이 따라 움직입니다. 그 상태에서 다른 손가락으로 탭하면 총알이 발사됩니다.',
         helpDesktopTitle: '키보드 조작',
@@ -112,11 +125,15 @@ const translations = {
         scoreValue: '分数',
         stageLabel: '关卡',
         stageValue: '关卡',
+        start: '开始',
+        stageIncreaseLabel: '提高关卡',
+        stageDecreaseLabel: '降低关卡',
         pause: '暂停',
         resume: '继续',
         restart: '重新开始',
         musicOn: '开启音乐',
         musicOff: '关闭音乐',
+        rapidFire: '连续发射',
         help: '使用方法',
         gameOver: '游戏结束',
         victory: '胜利！',
@@ -126,6 +143,7 @@ const translations = {
         closeLabel: '关闭',
         helpTitle: '使用方法',
         helpIntro: '使用方向键、空格键或触屏操作，消灭所有敌人。',
+        startPrompt: '点击开始按钮，从所选关卡开始游戏。',
         helpMobileTitle: '手机操作',
         helpMobileBody: '按住屏幕后左右滑动即可移动飞船。保持按住时，再用另一根手指点一下，就会发射子弹。',
         helpDesktopTitle: '键盘操作',
@@ -142,11 +160,15 @@ const translations = {
         scoreValue: 'Score',
         stageLabel: 'Stage',
         stageValue: 'Stage',
+        start: 'Start',
+        stageIncreaseLabel: 'Increase stage',
+        stageDecreaseLabel: 'Decrease stage',
         pause: 'Pause',
         resume: 'Resume',
         restart: 'Restart',
         musicOn: 'Music On',
         musicOff: 'Music Off',
+        rapidFire: 'Rapid Fire',
         help: 'How To Play',
         gameOver: 'Game Over',
         victory: 'Victory!',
@@ -156,6 +178,7 @@ const translations = {
         closeLabel: 'Close',
         helpTitle: 'How To Play',
         helpIntro: 'Defeat all enemies using the arrow keys, the space bar, or touch controls.',
+        startPrompt: 'Press Start to begin the game from the selected stage.',
         helpMobileTitle: 'Phone Controls',
         helpMobileBody: 'Press and hold the screen, then drag left or right to move the ship. While holding, tap with another finger to fire.',
         helpDesktopTitle: 'Keyboard Controls',
@@ -199,9 +222,17 @@ function playExplosionSound() {
 }
 
 function playPlayerExplosionSound() {
-    playSound(180, 0.45, 'sawtooth');
-    playSound(92, 0.55, 'triangle');
-    playSound(360, 0.18, 'square');
+    playSound(140, 0.8, 'sawtooth');
+    playSound(72, 1.05, 'triangle');
+    playSound(210, 0.65, 'sawtooth');
+    playSound(320, 0.32, 'square');
+}
+
+function syncStageControls() {
+    const stageControlsEnabled = !gameStarted || paused;
+    stageDownBtn.disabled = !stageControlsEnabled;
+    stageUpBtn.disabled = !stageControlsEnabled;
+    startBtn.disabled = !stageControlsEnabled;
 }
 
 function playNote(note, startTime, duration, type, volume) {
@@ -230,6 +261,15 @@ function stopBackgroundMusic() {
         clearInterval(musicTimer);
         musicTimer = null;
     }
+}
+
+async function syncBackgroundMusic() {
+    if (musicOn && gameStarted && !paused && !gameOver) {
+        await startBackgroundMusic();
+        return;
+    }
+
+    stopBackgroundMusic();
 }
 
 async function ensureAudioReady() {
@@ -356,27 +396,37 @@ const stageThemes = [
     }
 ];
 let enemyDirection = 1;
-const bulletSpeed = 6.5;
+const bulletSpeed = 3.25;
 const playerSpeed = 5;
 
-function init() {
+function changeStageSelection(direction) {
+    if (gameStarted && !paused) return;
+
+    stage = Math.max(1, Math.min(stageThemes.length, stage + direction));
+    updateUI();
+    applyStageTheme();
+}
+
+function init(startStage = stage) {
     player.x = canvas.width / 2 - 25;
     bullets = [];
     enemies = [];
     score = 0;
-    stage = 1;
+    stage = startStage;
     gameOver = false;
     gameOverReason = null;
+    gameStarted = true;
     paused = false;
+    musicOn = true;
+    bulletReady = true;
     enemyDirection = 1;
     moveTouchId = null;
     playerExplosion = null;
     syncLanguageUI();
     updateUI();
     applyStageTheme();
-    if (musicOn) {
-        startBackgroundMusic();
-    }
+    syncBackgroundMusic();
+    syncStageControls();
 
     // 적 생성
     for (let row = 0; row < enemyRows; row++) {
@@ -393,9 +443,8 @@ function init() {
 }
 
 function updateUI() {
-    const text = translations[currentLanguage];
-    scoreEl.querySelector('.hud-value').textContent = `${text.scoreValue}: ${score}`;
-    stageEl.querySelector('.hud-value').textContent = `${text.stageValue}: ${stage}`;
+    scoreEl.querySelector('.hud-value').textContent = String(score);
+    stageEl.querySelector('.hud-value').textContent = String(stage);
 }
 
 function draw() {
@@ -426,6 +475,19 @@ function draw() {
             drawEnemy(enemy.x, enemy.y);
         }
     });
+
+    if (!gameStarted) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffe066';
+        ctx.font = 'bold 34px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(getText('start'), canvas.width / 2, canvas.height / 2 - 12);
+        ctx.fillStyle = '#62f4ff';
+        ctx.font = '18px "Courier New", monospace';
+        ctx.fillText(getText('startPrompt'), canvas.width / 2, canvas.height / 2 + 28);
+        return;
+    }
 
     if (gameOver) {
         const overlayAlpha = playerExplosion ? Math.min(0.78, 0.2 + playerExplosion.frame * 0.02) : 0.7;
@@ -462,9 +524,14 @@ function syncLanguageUI() {
     creditsEl.textContent = text.credits;
     scoreEl.querySelector('.hud-label').textContent = text.scoreLabel;
     stageEl.querySelector('.hud-label').textContent = text.stageLabel;
+    startBtn.textContent = text.start;
+    stageUpBtn.setAttribute('aria-label', text.stageIncreaseLabel);
+    stageDownBtn.setAttribute('aria-label', text.stageDecreaseLabel);
     pauseBtn.textContent = paused ? text.resume : text.pause;
     restartBtn.textContent = text.restart;
     musicBtn.textContent = musicOn ? text.musicOff : text.musicOn;
+    rapidFireLabelEl.textContent = text.rapidFire;
+    rapidFireCheckbox.checked = rapidFireEnabled;
     helpBtn.textContent = text.help;
     languageBtn.textContent = text.languageButton;
     helpTitleEl.textContent = text.helpTitle;
@@ -477,6 +544,7 @@ function syncLanguageUI() {
     helpTipTitleEl.textContent = text.helpTipTitle;
     helpTipBodyEl.textContent = text.helpTipBody;
     syncHelpPanelVisibility();
+    syncStageControls();
 }
 
 function getStageTheme() {
@@ -689,6 +757,8 @@ function triggerPlayerDefeat() {
 
     gameOver = true;
     gameOverReason = 'defeat';
+    syncStageControls();
+    stopBackgroundMusic();
     playerExplosion = createPlayerExplosion();
     ensureAudioReady();
     playPlayerExplosionSound();
@@ -766,9 +836,11 @@ function createBullet() {
 }
 
 function shootBullet() {
-    if (gameOver || paused) return;
+    if (!gameStarted || gameOver || paused) return;
+    if (!rapidFireEnabled && !bulletReady) return;
 
     ensureAudioReady();
+    bulletReady = false;
     bullets.push(createBullet());
     playShootSound();
 }
@@ -831,14 +903,17 @@ function updateBullets() {
         if (bullet.x <= 0) {
             bullet.x = 0;
             bullet.vx *= -1;
+            bulletReady = true;
         } else if (bullet.x + bulletWidth >= canvas.width) {
             bullet.x = canvas.width - bulletWidth;
             bullet.vx *= -1;
+            bulletReady = true;
         }
 
         if (bullet.y <= 0) {
             bullet.y = 0;
             bullet.vy *= -1;
+            bulletReady = true;
         }
 
         // 플레이어 쪽으로 다시 내려온 총알은 피해 없이 제거
@@ -863,6 +938,7 @@ function handleBulletCollisions() {
                 bullet.y + bulletHeight > enemy.y) {
                 enemy.alive = false;
                 bullets.splice(bIndex, 1);
+                bulletReady = true;
                 score += 10;
                 updateUI();
                 playExplosionSound();
@@ -878,7 +954,7 @@ function handleBulletCollisions() {
 }
 
 function update() {
-    if (gameOver) return;
+    if (!gameStarted || gameOver) return;
 
     // 플레이어 이동
     if (keys['ArrowLeft'] && player.x > 0) player.x -= playerSpeed;
@@ -926,6 +1002,8 @@ function update() {
         } else if (!gameOver) {
             gameOver = true;
             gameOverReason = 'victory';
+            syncStageControls();
+            stopBackgroundMusic();
         }
     }
 }
@@ -947,7 +1025,7 @@ function nextStage() {
 }
 
 function gameLoop() {
-    if (!paused) {
+    if (gameStarted && !paused) {
         if (gameOver) {
             updatePlayerExplosion();
         } else {
@@ -964,9 +1042,10 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         shootBullet();
     }
-    if (e.key === 'p' || e.key === 'P') {
+    if (gameStarted && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
         paused = !paused;
+        syncBackgroundMusic();
         syncLanguageUI();
     }
 });
@@ -975,21 +1054,45 @@ document.addEventListener('keyup', (e) => {
     keys[e.key] = false;
 });
 
-restartBtn.addEventListener('click', init);
+stageDownBtn.addEventListener('click', () => {
+    changeStageSelection(-1);
+});
+
+stageUpBtn.addEventListener('click', () => {
+    changeStageSelection(1);
+});
+
+startBtn.addEventListener('click', () => {
+    if (gameStarted && !paused) return;
+    init(stage);
+});
+
+restartBtn.addEventListener('click', () => {
+    if (!gameStarted) return;
+    init(stage);
+});
 
 pauseBtn.addEventListener('click', () => {
+    if (!gameStarted) return;
     paused = !paused;
+    syncBackgroundMusic();
     syncLanguageUI();
 });
 
 musicBtn.addEventListener('click', async () => {
     musicOn = !musicOn;
     syncLanguageUI();
-    if (musicOn) {
-        await startBackgroundMusic();
-    } else {
-        stopBackgroundMusic();
+    await syncBackgroundMusic();
+});
+
+rapidFireCheckbox.addEventListener('change', () => {
+    rapidFireEnabled = rapidFireCheckbox.checked;
+    if (rapidFireEnabled) {
+        bulletReady = true;
+    } else if (bullets.length === 0) {
+        bulletReady = true;
     }
+    syncLanguageUI();
 });
 
 helpBtn.addEventListener('click', () => {
@@ -1028,5 +1131,7 @@ canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
 canvas.addEventListener('touchend', handleTouchEnd);
 canvas.addEventListener('touchcancel', handleTouchEnd);
 
-init();
+syncLanguageUI();
+updateUI();
+applyStageTheme();
 gameLoop();
