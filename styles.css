@@ -368,6 +368,10 @@ button:disabled {
     background: linear-gradient(180deg, #ff93d0, #ff5a8b);
 }
 
+#leaderboard-btn {
+    background: linear-gradient(180deg, #ffe8a3, #f4b942);
+}
+
 #help-btn {
     background: linear-gradient(180deg, #9dff9a, #3ccd74);
 }
@@ -416,6 +420,73 @@ button:disabled {
     font-size: 24px;
     line-height: 1;
     background: linear-gradient(180deg, #ffe066, #ff9652);
+}
+
+.record-form {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+#name-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 3px solid rgba(98, 244, 255, 0.28);
+    background: rgba(7, 13, 18, 0.92);
+    color: var(--text-main);
+    font: inherit;
+}
+
+#name-save-btn {
+    min-width: 120px;
+    flex: 0 0 auto;
+}
+
+.leaderboard-list {
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.leaderboard-entry,
+.leaderboard-empty {
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border: 2px solid rgba(98, 244, 255, 0.22);
+    background: rgba(4, 10, 14, 0.45);
+}
+
+.leaderboard-entry + .leaderboard-entry,
+.leaderboard-empty + .leaderboard-entry,
+.leaderboard-entry + .leaderboard-empty {
+    margin-top: 10px;
+}
+
+.leaderboard-rank {
+    color: var(--hud-yellow);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.leaderboard-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-main);
+}
+
+.leaderboard-score {
+    color: var(--hud-cyan);
+    font-weight: 700;
+}
+
+.leaderboard-empty {
+    grid-template-columns: 1fr;
+    color: rgba(248, 241, 215, 0.82);
 }
 
 .info-panel h2,
