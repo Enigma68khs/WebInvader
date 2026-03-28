@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>웹 인베이더 게임</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <div class="cabinet-glow" aria-hidden="true"></div>
+        <header id="marquee">
+            <div class="marquee-title">비앤씨 오락실</div>
+            <div class="marquee-subtitle">INSERT COIN TO DEFEND THE NET</div>
+            <div id="credits">Programed by Hansoo</div>
+        </header>
+        <div id="top-ui">
+            <div id="score" class="hud-panel">
+                <span class="hud-label">SCORE</span>
+                <span class="hud-value">점수: 0</span>
+            </div>
+            <div id="stage" class="hud-panel">
+                <span class="hud-label">STAGE</span>
+                <span class="hud-value">스테이지: 1</span>
+            </div>
+        </div>
+        <div class="screen-shell">
+            <canvas id="game-canvas" width="800" height="600"></canvas>
+        </div>
+        <div id="bottom-ui">
+            <button id="pause-btn">일시 정지</button>
+            <button id="restart-btn">다시하기</button>
+            <button id="music-btn">음악 켜기</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
