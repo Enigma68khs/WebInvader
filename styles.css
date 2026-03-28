@@ -29,7 +29,7 @@ body {
     overflow-x: hidden;
     overflow-y: auto;
     color: var(--text-main);
-    font-family: "Courier New", "Lucida Console", monospace;
+    font-family: "Courier New", "Lucida Console", "Apple SD Gothic Neo", "Malgun Gothic", "PingFang SC", "Microsoft YaHei", monospace;
     background:
         radial-gradient(circle at top, rgba(255, 146, 76, 0.18), transparent 30%),
         linear-gradient(180deg, #26113b 0%, #100816 45%, #050308 100%);

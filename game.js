@@ -4,7 +4,12 @@ const scoreEl = document.getElementById('score');
 const stageEl = document.getElementById('stage');
 const restartBtn = document.getElementById('restart-btn');
 const pauseBtn = document.getElementById('pause-btn');
+const musicBtn = document.getElementById('music-btn');
+const languageBtn = document.getElementById('language-btn');
 const screenShell = document.querySelector('.screen-shell');
+const marqueeTitleEl = document.querySelector('.marquee-title');
+const marqueeSubtitleEl = document.querySelector('.marquee-subtitle');
+const creditsEl = document.getElementById('credits');
 
 let player = { x: canvas.width / 2 - 25, y: canvas.height - 50, width: 50, height: 30 };
 let bullets = [];
@@ -17,6 +22,7 @@ let keys = {};
 let musicOn = false;
 let musicTimer = null;
 let musicStep = 0;
+let currentLanguage = 'ko';
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 ctx.imageSmoothingEnabled = false;
@@ -47,6 +53,49 @@ const noteFrequencies = {
     D5: 587.33,
     E5: 659.25,
     REST: null
+};
+
+const translations = {
+    ko: {
+        documentTitle: '웹 인베이더 게임',
+        marqueeTitle: 'BNC 오락실',
+        marqueeSubtitle: '네트워크를 지키기 위해 코인을 넣으세요',
+        credits: 'Hansoo 제작',
+        scoreLabel: '점수',
+        scoreValue: '점수',
+        stageLabel: '스테이지',
+        stageValue: '스테이지',
+        pause: '일시 정지',
+        resume: '재개',
+        restart: '다시하기',
+        musicOn: '음악 켜기',
+        musicOff: '음악 끄기',
+        gameOver: '게임 오버',
+        victory: '승리!',
+        restartHint: '다시하기를 눌러주세요',
+        stageCanvas: '스테이지',
+        languageToggle: '中文'
+    },
+    zh: {
+        documentTitle: '网页入侵者游戏',
+        marqueeTitle: 'BNC游戏厅',
+        marqueeSubtitle: '投币守护网络',
+        credits: 'Hansoo 制作',
+        scoreLabel: '分数',
+        scoreValue: '分数',
+        stageLabel: '关卡',
+        stageValue: '关卡',
+        pause: '暂停',
+        resume: '继续',
+        restart: '重新开始',
+        musicOn: '开启音乐',
+        musicOff: '关闭音乐',
+        gameOver: '游戏结束',
+        victory: '胜利！',
+        restartHint: '请点击重新开始',
+        stageCanvas: '关卡',
+        languageToggle: '한국어'
+    }
 };
 
 function playSound(frequency, duration, type = 'sine') {
@@ -152,7 +201,7 @@ const enemyPalettes = [
 ];
 const stageThemes = [
     {
-        name: 'Neon Grid',
+        name: { ko: '네온 그리드', zh: '霓虹网格' },
         skyTop: '#091523',
         skyBottom: '#02060d',
         bloom: 'rgba(80, 245, 255, 0.18)',
@@ -167,7 +216,7 @@ const stageThemes = [
         motif: 'stars'
     },
     {
-        name: 'Sunset Circuit',
+        name: { ko: '선셋 서킷', zh: '落日回路' },
         skyTop: '#2a1027',
         skyBottom: '#14050b',
         bloom: 'rgba(255, 168, 83, 0.22)',
@@ -182,7 +231,7 @@ const stageThemes = [
         motif: 'sun'
     },
     {
-        name: 'Deep Current',
+        name: { ko: '심해 조류', zh: '深海涌流' },
         skyTop: '#061b25',
         skyBottom: '#020b11',
         bloom: 'rgba(59, 182, 214, 0.2)',
@@ -197,7 +246,7 @@ const stageThemes = [
         motif: 'waves'
     },
     {
-        name: 'Molten Core',
+        name: { ko: '용암 코어', zh: '熔火核心' },
         skyTop: '#2a0b05',
         skyBottom: '#090202',
         bloom: 'rgba(255, 93, 44, 0.22)',
@@ -212,7 +261,7 @@ const stageThemes = [
         motif: 'embers'
     },
     {
-        name: 'Cosmic Rift',
+        name: { ko: '코스믹 리프트', zh: '宇宙裂隙' },
         skyTop: '#170729',
         skyBottom: '#05010c',
         bloom: 'rgba(192, 116, 255, 0.22)',
@@ -240,7 +289,7 @@ function init() {
     gameOver = false;
     paused = false;
     enemyDirection = 1;
-    pauseBtn.textContent = '일시 정지';
+    syncLanguageUI();
     updateUI();
     applyStageTheme();
     if (musicOn) {
@@ -262,8 +311,9 @@ function init() {
 }
 
 function updateUI() {
-    scoreEl.querySelector('.hud-value').textContent = `점수: ${score}`;
-    stageEl.querySelector('.hud-value').textContent = `스테이지: ${stage}`;
+    const text = translations[currentLanguage];
+    scoreEl.querySelector('.hud-value').textContent = `${text.scoreValue}: ${score}`;
+    stageEl.querySelector('.hud-value').textContent = `${text.stageValue}: ${stage}`;
 }
 
 function draw() {
@@ -300,12 +350,36 @@ function draw() {
         ctx.textAlign = 'center';
         ctx.shadowColor = '#ff5fb7';
         ctx.shadowBlur = 12;
-        ctx.fillText(stage > 5 ? '승리!' : '게임 오버', canvas.width / 2, canvas.height / 2);
+        ctx.fillText(stage > 5 ? getText('victory') : getText('gameOver'), canvas.width / 2, canvas.height / 2);
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#62f4ff';
         ctx.font = '20px "Courier New", monospace';
-        ctx.fillText('PRESS RESTART', canvas.width / 2, canvas.height / 2 + 42);
+        ctx.fillText(getText('restartHint'), canvas.width / 2, canvas.height / 2 + 42);
     }
+}
+
+function getText(key) {
+    return translations[currentLanguage][key];
+}
+
+function getLocalizedThemeName(theme) {
+    return theme.name[currentLanguage];
+}
+
+function syncLanguageUI() {
+    const text = translations[currentLanguage];
+
+    document.documentElement.lang = currentLanguage === 'ko' ? 'ko' : 'zh-CN';
+    document.title = text.documentTitle;
+    marqueeTitleEl.textContent = text.marqueeTitle;
+    marqueeSubtitleEl.textContent = text.marqueeSubtitle;
+    creditsEl.textContent = text.credits;
+    scoreEl.querySelector('.hud-label').textContent = text.scoreLabel;
+    stageEl.querySelector('.hud-label').textContent = text.stageLabel;
+    pauseBtn.textContent = paused ? text.resume : text.pause;
+    restartBtn.textContent = text.restart;
+    musicBtn.textContent = musicOn ? text.musicOff : text.musicOn;
+    languageBtn.textContent = text.languageToggle;
 }
 
 function getStageTheme() {
@@ -461,10 +535,10 @@ function drawStageLabel(theme) {
     ctx.fillStyle = theme.detail;
     ctx.font = 'bold 14px "Courier New", monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(`STAGE ${stage}`, 32, 32);
+    ctx.fillText(`${getText('stageCanvas')} ${stage}`, 32, 32);
     ctx.fillStyle = theme.accent;
     ctx.font = '12px "Courier New", monospace';
-    ctx.fillText(theme.name.toUpperCase(), 32, 49);
+    ctx.fillText(getLocalizedThemeName(theme), 32, 49);
     ctx.restore();
 }
 
@@ -660,7 +734,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'p' || e.key === 'P') {
         e.preventDefault();
         paused = !paused;
-        pauseBtn.textContent = paused ? '재개' : '일시 정지';
+        syncLanguageUI();
     }
 });
 
@@ -672,19 +746,23 @@ restartBtn.addEventListener('click', init);
 
 pauseBtn.addEventListener('click', () => {
     paused = !paused;
-    pauseBtn.textContent = paused ? '재개' : '일시 정지';
+    syncLanguageUI();
 });
-
-const musicBtn = document.getElementById('music-btn');
 
 musicBtn.addEventListener('click', async () => {
     musicOn = !musicOn;
-    musicBtn.textContent = musicOn ? '음악 끄기' : '음악 켜기';
+    syncLanguageUI();
     if (musicOn) {
         await startBackgroundMusic();
     } else {
         stopBackgroundMusic();
     }
+});
+
+languageBtn.addEventListener('click', () => {
+    currentLanguage = currentLanguage === 'ko' ? 'zh' : 'ko';
+    syncLanguageUI();
+    updateUI();
 });
 
 init();
