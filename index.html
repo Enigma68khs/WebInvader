@@ -13,6 +13,7 @@
             <div class="marquee-title">BNC 오락실</div>
             <div class="marquee-subtitle">INSERT COIN TO DEFEND THE NET</div>
             <div id="credits">Hansoo 제작</div>
+            <div id="marquee-high-score"></div>
         </header>
         <div id="top-ui">
             <div id="score" class="hud-panel">
@@ -37,10 +38,9 @@
             <canvas id="game-canvas" width="800" height="600"></canvas>
         </div>
         <div id="bottom-ui">
-            <button id="pause-btn">일시 정지</button>
+            <button id="pause-btn">일시정지</button>
             <button id="restart-btn">다시하기</button>
-            <button id="music-btn">음악 켜기</button>
-            <button id="leaderboard-btn">기록판</button>
+            <button id="music-btn">음악켜기</button>
             <button id="help-btn" aria-expanded="false" aria-controls="help-panel">사용방법</button>
             <button id="language-btn">한국어</button>
         </div>
@@ -56,15 +56,6 @@
                 <input id="name-input" type="text" maxlength="12" placeholder="이름" autocomplete="nickname">
                 <button id="name-save-btn" type="submit">저장</button>
             </form>
-        </section>
-    </div>
-    <div id="leaderboard-modal" class="modal-backdrop" hidden>
-        <section class="info-panel modal-panel" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title">
-            <div class="modal-header">
-                <h2 id="leaderboard-title">기록판</h2>
-                <button id="leaderboard-close-btn" class="modal-close-btn" type="button" aria-label="닫기">×</button>
-            </div>
-            <ol id="leaderboard-list" class="leaderboard-list"></ol>
         </section>
     </div>
     <div id="help-modal" class="modal-backdrop" hidden>

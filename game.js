@@ -8,7 +8,6 @@ const startBtn = document.getElementById('start-btn');
 const restartBtn = document.getElementById('restart-btn');
 const pauseBtn = document.getElementById('pause-btn');
 const musicBtn = document.getElementById('music-btn');
-const leaderboardBtn = document.getElementById('leaderboard-btn');
 const rapidFireCheckbox = document.getElementById('rapid-fire-checkbox');
 const rapidFireLabelEl = document.getElementById('rapid-fire-label');
 const helpBtn = document.getElementById('help-btn');
@@ -20,10 +19,6 @@ const nameModalTextEl = document.getElementById('name-modal-text');
 const nameForm = document.getElementById('name-form');
 const nameInput = document.getElementById('name-input');
 const nameSaveBtn = document.getElementById('name-save-btn');
-const leaderboardModal = document.getElementById('leaderboard-modal');
-const leaderboardCloseBtn = document.getElementById('leaderboard-close-btn');
-const leaderboardTitleEl = document.getElementById('leaderboard-title');
-const leaderboardListEl = document.getElementById('leaderboard-list');
 const helpModal = document.getElementById('help-modal');
 const helpPanel = document.getElementById('help-panel');
 const helpCloseBtn = document.getElementById('help-close-btn');
@@ -39,6 +34,7 @@ const screenShell = document.querySelector('.screen-shell');
 const marqueeTitleEl = document.querySelector('.marquee-title');
 const marqueeSubtitleEl = document.querySelector('.marquee-subtitle');
 const creditsEl = document.getElementById('credits');
+const marqueeHighScoreEl = document.getElementById('marquee-high-score');
 
 let player = { x: canvas.width / 2 - 25, y: canvas.height - 50, width: 50, height: 30 };
 let bullets = [];
@@ -58,7 +54,6 @@ let musicStep = 0;
 let currentLanguage = 'ko';
 let helpOpen = false;
 let nameModalOpen = false;
-let leaderboardOpen = false;
 let moveTouchId = null;
 let playerExplosion = null;
 let pendingHighScore = null;
@@ -111,12 +106,12 @@ const translations = {
         start: '시작',
         stageIncreaseLabel: '스테이지 증가',
         stageDecreaseLabel: '스테이지 감소',
-        pause: '일시 정지',
+        pause: '일시정지',
         resume: '재개',
         restart: '다시하기',
-        musicOn: '음악 켜기',
-        musicOff: '음악 끄기',
-        leaderboard: '기록판',
+        musicOn: '음악켜기',
+        musicOff: '음악끄기',
+        topScoreLabel: '최고점수',
         rapidFire: '연속발사',
         help: '사용방법',
         gameOver: '게임 오버',
@@ -126,7 +121,6 @@ const translations = {
         newRecordPrompt: '최고기록을 세웠습니다. 이름을 입력해 주세요.',
         namePlaceholder: '이름',
         saveRecord: '저장',
-        leaderboardTitle: '기록판',
         emptyRecord: '아직 기록이 없습니다.',
         stageCanvas: '스테이지',
         languageButton: '한국어',
@@ -158,7 +152,7 @@ const translations = {
         restart: '重新开始',
         musicOn: '开启音乐',
         musicOff: '关闭音乐',
-        leaderboard: '排行榜',
+        topScoreLabel: '最高分',
         rapidFire: '连续发射',
         help: '使用方法',
         gameOver: '游戏结束',
@@ -168,7 +162,6 @@ const translations = {
         newRecordPrompt: '你打入了排行榜。请输入名字。',
         namePlaceholder: '名字',
         saveRecord: '保存',
-        leaderboardTitle: '排行榜',
         emptyRecord: '暂无记录。',
         stageCanvas: '关卡',
         languageButton: '中文',
@@ -200,7 +193,7 @@ const translations = {
         restart: 'Restart',
         musicOn: 'Music On',
         musicOff: 'Music Off',
-        leaderboard: 'Records',
+        topScoreLabel: 'Top Score',
         rapidFire: 'Rapid Fire',
         help: 'How To Play',
         gameOver: 'Game Over',
@@ -210,7 +203,6 @@ const translations = {
         newRecordPrompt: 'You made the leaderboard. Enter your name.',
         namePlaceholder: 'Name',
         saveRecord: 'Save',
-        leaderboardTitle: 'Leaderboard',
         emptyRecord: 'No records yet.',
         stageCanvas: 'Stage',
         languageButton: 'English',
@@ -236,11 +228,6 @@ function syncHelpPanelVisibility() {
 function syncNameModalVisibility() {
     nameModal.hidden = !nameModalOpen;
     nameModal.setAttribute('aria-hidden', String(!nameModalOpen));
-}
-
-function syncLeaderboardVisibility() {
-    leaderboardModal.hidden = !leaderboardOpen;
-    leaderboardModal.setAttribute('aria-hidden', String(!leaderboardOpen));
 }
 
 function loadHighScores() {
@@ -277,33 +264,14 @@ function isHighScore(scoreValue) {
 
 function renderLeaderboard() {
     const text = translations[currentLanguage];
-
-    if (highScores.length === 0) {
-        leaderboardListEl.innerHTML = `<li class="leaderboard-empty">${text.emptyRecord}</li>`;
-        return;
-    }
-
-    leaderboardListEl.innerHTML = '';
-
-    highScores.forEach((entry, index) => {
-        const item = document.createElement('li');
-        item.className = 'leaderboard-entry';
-
-        const rank = document.createElement('span');
-        rank.className = 'leaderboard-rank';
-        rank.textContent = String(index + 1);
-
-        const name = document.createElement('span');
-        name.className = 'leaderboard-name';
-        name.textContent = entry.name;
-
-        const scoreValue = document.createElement('span');
-        scoreValue.className = 'leaderboard-score';
-        scoreValue.textContent = String(entry.score);
-
-        item.append(rank, name, scoreValue);
-        leaderboardListEl.appendChild(item);
+    const entries = Array.from({ length: MAX_HIGH_SCORES }, (_, index) => {
+        const entry = highScores[index];
+        return entry
+            ? `${index + 1}. ${entry.name} ${entry.score}`
+            : `${index + 1}. ---`;
     });
+
+    marqueeHighScoreEl.textContent = `${text.topScoreLabel}  ${entries.join('  |  ')}`;
 }
 
 function maybePromptHighScore() {
@@ -318,11 +286,6 @@ function maybePromptHighScore() {
 function closeNameModal() {
     nameModalOpen = false;
     syncNameModalVisibility();
-}
-
-function closeLeaderboard() {
-    leaderboardOpen = false;
-    syncLeaderboardVisibility();
 }
 
 function playSound(frequency, duration, type = 'sine') {
@@ -664,7 +627,6 @@ function syncLanguageUI() {
     pauseBtn.textContent = paused ? text.resume : text.pause;
     restartBtn.textContent = text.restart;
     musicBtn.textContent = musicOn ? text.musicOff : text.musicOn;
-    leaderboardBtn.textContent = text.leaderboard;
     rapidFireLabelEl.textContent = text.rapidFire;
     rapidFireCheckbox.checked = rapidFireEnabled;
     helpBtn.textContent = text.help;
@@ -673,11 +635,9 @@ function syncLanguageUI() {
     nameModalTextEl.textContent = text.newRecordPrompt;
     nameInput.placeholder = text.namePlaceholder;
     nameSaveBtn.textContent = text.saveRecord;
-    leaderboardTitleEl.textContent = text.leaderboardTitle;
     helpTitleEl.textContent = text.helpTitle;
     helpCloseBtn.setAttribute('aria-label', text.closeLabel);
     nameCloseBtn.setAttribute('aria-label', text.closeLabel);
-    leaderboardCloseBtn.setAttribute('aria-label', text.closeLabel);
     helpIntroEl.textContent = text.helpIntro;
     helpMobileTitleEl.textContent = text.helpMobileTitle;
     helpMobileBodyEl.textContent = text.helpMobileBody;
@@ -687,7 +647,6 @@ function syncLanguageUI() {
     helpTipBodyEl.textContent = text.helpTipBody;
     syncHelpPanelVisibility();
     syncNameModalVisibility();
-    syncLeaderboardVisibility();
     renderLeaderboard();
     syncStageControls();
 }
@@ -1232,12 +1191,6 @@ musicBtn.addEventListener('click', async () => {
     await syncBackgroundMusic();
 });
 
-leaderboardBtn.addEventListener('click', () => {
-    leaderboardOpen = true;
-    renderLeaderboard();
-    syncLeaderboardVisibility();
-});
-
 rapidFireCheckbox.addEventListener('change', () => {
     rapidFireEnabled = rapidFireCheckbox.checked;
     if (rapidFireEnabled) {
@@ -1264,23 +1217,14 @@ nameForm.addEventListener('submit', (event) => {
     saveHighScores();
     pendingHighScore = null;
     closeNameModal();
-    leaderboardOpen = true;
     renderLeaderboard();
-    syncLeaderboardVisibility();
 });
 
 nameCloseBtn.addEventListener('click', closeNameModal);
-leaderboardCloseBtn.addEventListener('click', closeLeaderboard);
 
 nameModal.addEventListener('click', (event) => {
     if (event.target === nameModal) {
         closeNameModal();
-    }
-});
-
-leaderboardModal.addEventListener('click', (event) => {
-    if (event.target === leaderboardModal) {
-        closeLeaderboard();
     }
 });
 
@@ -1313,11 +1257,6 @@ document.addEventListener('keydown', (event) => {
 
     if (nameModalOpen) {
         closeNameModal();
-        return;
-    }
-
-    if (leaderboardOpen) {
-        closeLeaderboard();
         return;
     }
 
