@@ -7,7 +7,9 @@ const pauseBtn = document.getElementById('pause-btn');
 const musicBtn = document.getElementById('music-btn');
 const helpBtn = document.getElementById('help-btn');
 const languageBtn = document.getElementById('language-btn');
+const helpModal = document.getElementById('help-modal');
 const helpPanel = document.getElementById('help-panel');
+const helpCloseBtn = document.getElementById('help-close-btn');
 const helpTitleEl = document.getElementById('help-title');
 const helpIntroEl = document.getElementById('help-intro');
 const helpMobileTitleEl = document.getElementById('help-mobile-title');
@@ -37,6 +39,7 @@ let currentLanguage = 'ko';
 let helpOpen = false;
 let moveTouchId = null;
 let playerExplosion = null;
+const languageOrder = ['ko', 'zh', 'en'];
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 ctx.imageSmoothingEnabled = false;
@@ -89,7 +92,8 @@ const translations = {
         victory: '승리!',
         restartHint: '다시하기를 눌러주세요',
         stageCanvas: '스테이지',
-        languageToggle: '中文',
+        languageButton: '한국어',
+        closeLabel: '닫기',
         helpTitle: '사용방법',
         helpIntro: '방향키와 스페이스바 또는 터치 조작으로 모든 적을 물리치세요.',
         helpMobileTitle: '핸드폰 조작',
@@ -118,7 +122,8 @@ const translations = {
         victory: '胜利！',
         restartHint: '请点击重新开始',
         stageCanvas: '关卡',
-        languageToggle: '한국어',
+        languageButton: '中文',
+        closeLabel: '关闭',
         helpTitle: '使用方法',
         helpIntro: '使用方向键、空格键或触屏操作，消灭所有敌人。',
         helpMobileTitle: '手机操作',
@@ -127,11 +132,42 @@ const translations = {
         helpDesktopBody: '使用左右方向键移动，按空格键发射。按 P 键或暂停按钮可以暂停游戏。',
         helpTipTitle: '游玩提示',
         helpTipBody: '子弹会在墙壁和顶部反弹。提前计算反弹路线，可以更快击中高处或边缘的敌人。'
+    },
+    en: {
+        documentTitle: 'Web Invader Game',
+        marqueeTitle: 'BNC Arcade',
+        marqueeSubtitle: 'Insert Coin to Defend the Net',
+        credits: 'Created by Hansoo',
+        scoreLabel: 'Score',
+        scoreValue: 'Score',
+        stageLabel: 'Stage',
+        stageValue: 'Stage',
+        pause: 'Pause',
+        resume: 'Resume',
+        restart: 'Restart',
+        musicOn: 'Music On',
+        musicOff: 'Music Off',
+        help: 'How To Play',
+        gameOver: 'Game Over',
+        victory: 'Victory!',
+        restartHint: 'Press Restart to play again',
+        stageCanvas: 'Stage',
+        languageButton: 'English',
+        closeLabel: 'Close',
+        helpTitle: 'How To Play',
+        helpIntro: 'Defeat all enemies using the arrow keys, the space bar, or touch controls.',
+        helpMobileTitle: 'Phone Controls',
+        helpMobileBody: 'Press and hold the screen, then drag left or right to move the ship. While holding, tap with another finger to fire.',
+        helpDesktopTitle: 'Keyboard Controls',
+        helpDesktopBody: 'Use the left and right arrow keys to move and press the space bar to fire. Press P or the pause button to pause the game.',
+        helpTipTitle: 'Play Tip',
+        helpTipBody: 'Bullets bounce off the walls and ceiling. Use the rebound angle to hit enemies near the top or edges faster.'
     }
 };
 
 function syncHelpPanelVisibility() {
-    helpPanel.hidden = !helpOpen;
+    helpModal.hidden = !helpOpen;
+    helpModal.setAttribute('aria-hidden', String(!helpOpen));
     helpBtn.setAttribute('aria-expanded', String(helpOpen));
 }
 
@@ -244,7 +280,7 @@ const enemyPalettes = [
 ];
 const stageThemes = [
     {
-        name: { ko: '네온 그리드', zh: '霓虹网格' },
+        name: { ko: '네온 그리드', zh: '霓虹网格', en: 'Neon Grid' },
         skyTop: '#091523',
         skyBottom: '#02060d',
         bloom: 'rgba(80, 245, 255, 0.18)',
@@ -259,7 +295,7 @@ const stageThemes = [
         motif: 'stars'
     },
     {
-        name: { ko: '선셋 서킷', zh: '落日回路' },
+        name: { ko: '선셋 서킷', zh: '落日回路', en: 'Sunset Circuit' },
         skyTop: '#2a1027',
         skyBottom: '#14050b',
         bloom: 'rgba(255, 168, 83, 0.22)',
@@ -274,7 +310,7 @@ const stageThemes = [
         motif: 'sun'
     },
     {
-        name: { ko: '심해 조류', zh: '深海涌流' },
+        name: { ko: '심해 조류', zh: '深海涌流', en: 'Deepsea Current' },
         skyTop: '#061b25',
         skyBottom: '#020b11',
         bloom: 'rgba(59, 182, 214, 0.2)',
@@ -289,7 +325,7 @@ const stageThemes = [
         motif: 'waves'
     },
     {
-        name: { ko: '용암 코어', zh: '熔火核心' },
+        name: { ko: '용암 코어', zh: '熔火核心', en: 'Lava Core' },
         skyTop: '#2a0b05',
         skyBottom: '#090202',
         bloom: 'rgba(255, 93, 44, 0.22)',
@@ -304,7 +340,7 @@ const stageThemes = [
         motif: 'embers'
     },
     {
-        name: { ko: '코스믹 리프트', zh: '宇宙裂隙' },
+        name: { ko: '코스믹 리프트', zh: '宇宙裂隙', en: 'Cosmic Rift' },
         skyTop: '#170729',
         skyBottom: '#05010c',
         bloom: 'rgba(192, 116, 255, 0.22)',
@@ -419,7 +455,7 @@ function getLocalizedThemeName(theme) {
 function syncLanguageUI() {
     const text = translations[currentLanguage];
 
-    document.documentElement.lang = currentLanguage === 'ko' ? 'ko' : 'zh-CN';
+    document.documentElement.lang = currentLanguage === 'ko' ? 'ko' : currentLanguage === 'zh' ? 'zh-CN' : 'en';
     document.title = text.documentTitle;
     marqueeTitleEl.textContent = text.marqueeTitle;
     marqueeSubtitleEl.textContent = text.marqueeSubtitle;
@@ -430,8 +466,9 @@ function syncLanguageUI() {
     restartBtn.textContent = text.restart;
     musicBtn.textContent = musicOn ? text.musicOff : text.musicOn;
     helpBtn.textContent = text.help;
-    languageBtn.textContent = text.languageToggle;
+    languageBtn.textContent = text.languageButton;
     helpTitleEl.textContent = text.helpTitle;
+    helpCloseBtn.setAttribute('aria-label', text.closeLabel);
     helpIntroEl.textContent = text.helpIntro;
     helpMobileTitleEl.textContent = text.helpMobileTitle;
     helpMobileBodyEl.textContent = text.helpMobileBody;
@@ -960,10 +997,30 @@ helpBtn.addEventListener('click', () => {
     syncHelpPanelVisibility();
 });
 
+helpCloseBtn.addEventListener('click', () => {
+    helpOpen = false;
+    syncHelpPanelVisibility();
+});
+
+helpModal.addEventListener('click', (event) => {
+    if (event.target === helpModal) {
+        helpOpen = false;
+        syncHelpPanelVisibility();
+    }
+});
+
 languageBtn.addEventListener('click', () => {
-    currentLanguage = currentLanguage === 'ko' ? 'zh' : 'ko';
+    const currentIndex = languageOrder.indexOf(currentLanguage);
+    currentLanguage = languageOrder[(currentIndex + 1) % languageOrder.length];
     syncLanguageUI();
     updateUI();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && helpOpen) {
+        helpOpen = false;
+        syncHelpPanelVisibility();
+    }
 });
 
 canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
