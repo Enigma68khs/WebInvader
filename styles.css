@@ -523,6 +523,7 @@ button:disabled {
 
     #bottom-ui {
         gap: 8px;
+        justify-content: flex-start;
     }
 
     .hud-panel {
@@ -555,7 +556,9 @@ button:disabled {
     button {
         width: auto;
         max-width: none;
-        padding: 11px 10px;
-        font-size: 13px;
+        flex: 0 0 auto;
+        padding: 10px 8px;
+        font-size: clamp(10px, 2.8vw, 12px);
+        letter-spacing: 0;
     }
 }
