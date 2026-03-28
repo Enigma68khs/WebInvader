@@ -19,20 +19,20 @@
             <div id="score" class="hud-panel">
                 <span class="hud-label">점수</span>
                 <span class="hud-value">0</span>
+                <label id="rapid-fire-control" class="toggle-control">
+                    <span id="rapid-fire-label" class="hud-label">연속발사</span>
+                    <input id="rapid-fire-checkbox" type="checkbox">
+                </label>
             </div>
             <div id="stage" class="hud-panel">
                 <span class="hud-label">스테이지</span>
                 <span class="hud-value">1</span>
                 <div class="stage-config" aria-label="시작 스테이지 선택">
-                    <button id="stage-down-btn" class="stage-step-btn" type="button" aria-label="스테이지 감소">-</button>
-                    <button id="stage-up-btn" class="stage-step-btn" type="button" aria-label="스테이지 증가">+</button>
+                    <button id="stage-down-btn" class="stage-step-btn" type="button" aria-label="스테이지 감소">▾</button>
+                    <button id="stage-up-btn" class="stage-step-btn" type="button" aria-label="스테이지 증가">▴</button>
                     <button id="start-btn" class="stage-start-btn" type="button">시작</button>
                 </div>
             </div>
-            <label id="rapid-fire-control" class="hud-panel toggle-control">
-                <span id="rapid-fire-label" class="hud-label">연속발사</span>
-                <input id="rapid-fire-checkbox" type="checkbox">
-            </label>
         </div>
         <div class="screen-shell">
             <canvas id="game-canvas" width="800" height="600"></canvas>

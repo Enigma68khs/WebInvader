@@ -159,7 +159,7 @@ body::after {
 
 #top-ui {
     display: grid;
-    grid-template-columns: minmax(160px, 0.9fr) minmax(320px, 1.3fr) minmax(180px, 0.95fr);
+    grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr);
     align-items: stretch;
     gap: 14px;
 }
@@ -185,7 +185,7 @@ body::after {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 16px;
+    padding: 0;
     font: inherit;
     font-size: 13px;
     font-weight: 700;
@@ -194,8 +194,9 @@ body::after {
     white-space: nowrap;
     flex: 0 0 auto;
     color: var(--hud-yellow);
-    min-width: 190px;
+    min-width: 0;
     justify-content: space-between;
+    margin-left: auto;
 }
 
 .toggle-control input {
@@ -272,9 +273,9 @@ body::after {
 }
 
 .stage-step-btn {
-    width: 42px;
-    padding: 7px 0;
-    font-size: 20px;
+    width: 34px;
+    padding: 6px 0;
+    font-size: 16px;
     line-height: 1;
 }
 
