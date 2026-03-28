@@ -17,6 +17,7 @@ let enemies = [];
 let score = 0;
 let stage = 1;
 let gameOver = false;
+let gameOverReason = null;
 let paused = false;
 let keys = {};
 let musicOn = false;
@@ -24,6 +25,7 @@ let musicTimer = null;
 let musicStep = 0;
 let currentLanguage = 'ko';
 let moveTouchId = null;
+let playerExplosion = null;
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 ctx.imageSmoothingEnabled = false;
@@ -124,6 +126,12 @@ function playShootSound() {
 
 function playExplosionSound() {
     playSound(200, 0.3, 'sawtooth');
+}
+
+function playPlayerExplosionSound() {
+    playSound(180, 0.45, 'sawtooth');
+    playSound(92, 0.55, 'triangle');
+    playSound(360, 0.18, 'square');
 }
 
 function playNote(note, startTime, duration, type, volume) {
@@ -288,8 +296,11 @@ function init() {
     score = 0;
     stage = 1;
     gameOver = false;
+    gameOverReason = null;
     paused = false;
     enemyDirection = 1;
+    moveTouchId = null;
+    playerExplosion = null;
     syncLanguageUI();
     updateUI();
     applyStageTheme();
@@ -325,8 +336,11 @@ function draw() {
     drawGrid(theme);
     drawStageLabel(theme);
 
-    // 플레이어 그리기
-    drawPixelShip(player.x, player.y, '#5eff9b', '#d9ffe5');
+    if (!playerExplosion) {
+        drawPixelShip(player.x, player.y, '#5eff9b', '#d9ffe5');
+    } else {
+        drawPlayerExplosion();
+    }
 
     // 총알 그리기
     bullets.forEach(bullet => {
@@ -344,14 +358,15 @@ function draw() {
     });
 
     if (gameOver) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        const overlayAlpha = playerExplosion ? Math.min(0.78, 0.2 + playerExplosion.frame * 0.02) : 0.7;
+        ctx.fillStyle = `rgba(0, 0, 0, ${overlayAlpha})`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#ffe066';
         ctx.font = 'bold 48px "Courier New", monospace';
         ctx.textAlign = 'center';
         ctx.shadowColor = '#ff5fb7';
         ctx.shadowBlur = 12;
-        ctx.fillText(stage > 5 ? getText('victory') : getText('gameOver'), canvas.width / 2, canvas.height / 2);
+        ctx.fillText(gameOverReason === 'victory' ? getText('victory') : getText('gameOver'), canvas.width / 2, canvas.height / 2);
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#62f4ff';
         ctx.font = '20px "Courier New", monospace';
@@ -555,6 +570,83 @@ function drawPixelShip(x, y, baseColor, accentColor) {
     ctx.fillRect(x + 38, y + 20, 8, 6);
 }
 
+function createPlayerExplosion() {
+    const particles = [];
+    const blocks = [
+        { x: 8, y: 16, width: 34, height: 10, color: '#5eff9b' },
+        { x: 16, y: 8, width: 18, height: 8, color: '#5eff9b' },
+        { x: 22, y: 0, width: 6, height: 8, color: '#5eff9b' },
+        { x: 22, y: 12, width: 6, height: 8, color: '#d9ffe5' },
+        { x: 4, y: 20, width: 8, height: 6, color: '#d9ffe5' },
+        { x: 38, y: 20, width: 8, height: 6, color: '#d9ffe5' }
+    ];
+
+    blocks.forEach(block => {
+        for (let offsetX = 0; offsetX < block.width; offsetX += 4) {
+            for (let offsetY = 0; offsetY < block.height; offsetY += 4) {
+                particles.push({
+                    x: player.x + block.x + offsetX,
+                    y: player.y + block.y + offsetY,
+                    vx: (Math.random() - 0.5) * 5.2,
+                    vy: -Math.random() * 4.2 - 0.4,
+                    size: 4,
+                    color: block.color
+                });
+            }
+        }
+    });
+
+    return {
+        frame: 0,
+        flash: 1,
+        particles
+    };
+}
+
+function triggerPlayerDefeat() {
+    if (gameOver) return;
+
+    gameOver = true;
+    gameOverReason = 'defeat';
+    playerExplosion = createPlayerExplosion();
+    ensureAudioReady();
+    playPlayerExplosionSound();
+}
+
+function updatePlayerExplosion() {
+    if (!playerExplosion) return;
+
+    playerExplosion.frame++;
+    playerExplosion.flash = Math.max(0, playerExplosion.flash - 0.08);
+
+    playerExplosion.particles.forEach(particle => {
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        particle.vy += 0.18;
+        particle.vx *= 0.99;
+    });
+}
+
+function drawPlayerExplosion() {
+    if (!playerExplosion) return;
+
+    ctx.save();
+
+    playerExplosion.particles.forEach(particle => {
+        ctx.fillStyle = particle.color;
+        ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
+    });
+
+    if (playerExplosion.flash > 0) {
+        ctx.fillStyle = `rgba(255, 240, 180, ${playerExplosion.flash * 0.45})`;
+        ctx.beginPath();
+        ctx.arc(player.x + player.width / 2, player.y + player.height / 2, 46 + playerExplosion.frame * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
 function getEnemyPalette() {
     return enemyPalettes[(stage - 1) % enemyPalettes.length];
 }
@@ -740,7 +832,7 @@ function update() {
     // 게임 오버 체크
     enemies.forEach(enemy => {
         if (enemy.alive && enemy.y + enemy.height >= player.y) {
-            gameOver = true;
+            triggerPlayerDefeat();
         }
     });
 
@@ -750,8 +842,9 @@ function update() {
             stage++;
             updateUI();
             nextStage();
-        } else {
-            gameOver = true; // 승리
+        } else if (!gameOver) {
+            gameOver = true;
+            gameOverReason = 'victory';
         }
     }
 }
@@ -774,7 +867,11 @@ function nextStage() {
 
 function gameLoop() {
     if (!paused) {
-        update();
+        if (gameOver) {
+            updatePlayerExplosion();
+        } else {
+            update();
+        }
     }
     draw();
     requestAnimationFrame(gameLoop);
