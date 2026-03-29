@@ -58,9 +58,14 @@ let moveTouchId = null;
 let playerExplosion = null;
 let pendingHighScore = null;
 let highScores = [];
+let supabaseClient = null;
+let leaderboardLoading = false;
+let leaderboardSource = 'local';
+let nameModalStatusKey = null;
 const languageOrder = ['ko', 'zh', 'en'];
 const HIGH_SCORE_STORAGE_KEY = 'webinvader.highscores.v1';
 const MAX_HIGH_SCORES = 5;
+const SUPABASE_TABLE_NAME = 'leaderboard_scores';
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 ctx.imageSmoothingEnabled = false;
@@ -112,6 +117,9 @@ const translations = {
         musicOn: '음악켜기',
         musicOff: '음악끄기',
         topScoreLabel: '최고점수',
+        globalBoard: '전역 TOP 5',
+        localBoard: '로컬 TOP 5',
+        loadingRecords: '불러오는 중...',
         rapidFire: '연속발사',
         help: '사용방법',
         gameOver: '게임 오버',
@@ -119,6 +127,8 @@ const translations = {
         restartHint: '다시하기를 눌러주세요',
         newRecordTitle: '최고기록 등록',
         newRecordPrompt: '최고기록을 세웠습니다. 이름을 입력해 주세요.',
+        saveRecordPending: '기록을 저장하는 중입니다...',
+        saveRecordFailed: '전역 기록 저장에 실패했습니다. 다시 시도해 주세요.',
         namePlaceholder: '이름',
         saveRecord: '저장',
         emptyRecord: '아직 기록이 없습니다.',
@@ -153,6 +163,9 @@ const translations = {
         musicOn: '开启音乐',
         musicOff: '关闭音乐',
         topScoreLabel: '最高分',
+        globalBoard: '全球 TOP 5',
+        localBoard: '本地 TOP 5',
+        loadingRecords: '正在加载...',
         rapidFire: '连续发射',
         help: '使用方法',
         gameOver: '游戏结束',
@@ -160,6 +173,8 @@ const translations = {
         restartHint: '请点击重新开始',
         newRecordTitle: '登记最高纪录',
         newRecordPrompt: '你打入了排行榜。请输入名字。',
+        saveRecordPending: '正在保存记录...',
+        saveRecordFailed: '保存全球记录失败，请重试。',
         namePlaceholder: '名字',
         saveRecord: '保存',
         emptyRecord: '暂无记录。',
@@ -194,6 +209,9 @@ const translations = {
         musicOn: 'Music On',
         musicOff: 'Music Off',
         topScoreLabel: 'Top Score',
+        globalBoard: 'Global Top 5',
+        localBoard: 'Local Top 5',
+        loadingRecords: 'Loading...',
         rapidFire: 'Rapid Fire',
         help: 'How To Play',
         gameOver: 'Game Over',
@@ -201,6 +219,8 @@ const translations = {
         restartHint: 'Press Restart to play again',
         newRecordTitle: 'New High Score',
         newRecordPrompt: 'You made the leaderboard. Enter your name.',
+        saveRecordPending: 'Saving your record...',
+        saveRecordFailed: 'Failed to save the global record. Please try again.',
         namePlaceholder: 'Name',
         saveRecord: 'Save',
         emptyRecord: 'No records yet.',
@@ -230,19 +250,27 @@ function syncNameModalVisibility() {
     nameModal.setAttribute('aria-hidden', String(!nameModalOpen));
 }
 
+function sanitizeHighScoreEntries(entries) {
+    if (!Array.isArray(entries)) return [];
+
+    return entries
+        .filter(entry => entry && typeof entry.name === 'string' && Number.isFinite(entry.score))
+        .map(entry => ({
+            name: entry.name.trim().slice(0, 12) || 'AAA',
+            score: Math.max(0, Math.floor(entry.score))
+        }))
+        .filter(entry => entry.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, MAX_HIGH_SCORES);
+}
+
 function loadHighScores() {
     try {
         const raw = window.localStorage.getItem(HIGH_SCORE_STORAGE_KEY);
         if (!raw) return [];
 
         const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-
-        return parsed
-            .filter(entry => entry && typeof entry.name === 'string' && Number.isFinite(entry.score))
-            .map(entry => ({ name: entry.name.slice(0, 12), score: entry.score }))
-            .sort((a, b) => b.score - a.score)
-            .slice(0, MAX_HIGH_SCORES);
+        return sanitizeHighScoreEntries(parsed);
     } catch {
         return [];
     }
@@ -256,6 +284,95 @@ function saveHighScores() {
     }
 }
 
+function createSupabaseClient() {
+    const config = window.WEB_INVADER_SUPABASE_CONFIG;
+    const url = typeof config?.url === 'string' ? config.url.trim() : '';
+    const anonKey = typeof config?.anonKey === 'string' ? config.anonKey.trim() : '';
+
+    if (!url || !anonKey || !window.supabase?.createClient) {
+        return null;
+    }
+
+    return window.supabase.createClient(url, anonKey, {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false
+        }
+    });
+}
+
+function mergeHighScoreEntry(entry) {
+    return sanitizeHighScoreEntries([...highScores, entry]);
+}
+
+function setNameModalStatus(statusKey = null) {
+    nameModalStatusKey = statusKey;
+    nameModalTextEl.textContent = getText(statusKey || 'newRecordPrompt');
+}
+
+async function refreshHighScores() {
+    if (!supabaseClient) {
+        leaderboardSource = 'local';
+        leaderboardLoading = false;
+        renderLeaderboard();
+        return;
+    }
+
+    leaderboardLoading = true;
+    renderLeaderboard();
+
+    const { data, error } = await supabaseClient
+        .from(SUPABASE_TABLE_NAME)
+        .select('player_name, score, created_at')
+        .order('score', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(MAX_HIGH_SCORES);
+
+    if (error) {
+        leaderboardSource = 'local';
+        leaderboardLoading = false;
+        highScores = loadHighScores();
+        renderLeaderboard();
+        return;
+    }
+
+    highScores = sanitizeHighScoreEntries(
+        data.map(entry => ({
+            name: entry.player_name,
+            score: entry.score
+        }))
+    );
+    saveHighScores();
+    leaderboardSource = 'global';
+    leaderboardLoading = false;
+    renderLeaderboard();
+}
+
+async function submitHighScore(entry) {
+    const normalizedEntry = {
+        name: entry.name.trim().slice(0, 12) || 'AAA',
+        score: Math.max(0, Math.floor(entry.score))
+    };
+
+    if (supabaseClient) {
+        const { error } = await supabaseClient
+            .from(SUPABASE_TABLE_NAME)
+            .insert([{ player_name: normalizedEntry.name, score: normalizedEntry.score }]);
+
+        if (error) {
+            throw error;
+        }
+
+        await refreshHighScores();
+        return;
+    }
+
+    highScores = mergeHighScoreEntry(normalizedEntry);
+    saveHighScores();
+    leaderboardSource = 'local';
+    renderLeaderboard();
+}
+
 function isHighScore(scoreValue) {
     if (scoreValue <= 0) return false;
     if (highScores.length < MAX_HIGH_SCORES) return true;
@@ -264,6 +381,13 @@ function isHighScore(scoreValue) {
 
 function renderLeaderboard() {
     const text = translations[currentLanguage];
+    const boardLabel = leaderboardSource === 'global' ? text.globalBoard : text.localBoard;
+
+    if (leaderboardLoading) {
+        marqueeHighScoreEl.textContent = `${boardLabel}  ${text.loadingRecords}`;
+        return;
+    }
+
     const entries = Array.from({ length: MAX_HIGH_SCORES }, (_, index) => {
         const entry = highScores[index];
         return entry
@@ -271,7 +395,7 @@ function renderLeaderboard() {
             : `${index + 1}. ---`;
     });
 
-    marqueeHighScoreEl.textContent = `${text.topScoreLabel}  ${entries.join('  |  ')}`;
+    marqueeHighScoreEl.textContent = `${boardLabel}  ${entries.join('  |  ')}`;
 }
 
 function maybePromptHighScore() {
@@ -279,6 +403,7 @@ function maybePromptHighScore() {
 
     pendingHighScore = { score };
     nameInput.value = '';
+    setNameModalStatus();
     nameModalOpen = true;
     syncNameModalVisibility();
 }
@@ -645,6 +770,7 @@ function syncLanguageUI() {
     helpDesktopBodyEl.textContent = text.helpDesktopBody;
     helpTipTitleEl.textContent = text.helpTipTitle;
     helpTipBodyEl.textContent = text.helpTipBody;
+    setNameModalStatus(nameModalStatusKey);
     syncHelpPanelVisibility();
     syncNameModalVisibility();
     renderLeaderboard();
@@ -1201,9 +1327,12 @@ rapidFireCheckbox.addEventListener('change', () => {
     syncLanguageUI();
 });
 
-nameForm.addEventListener('submit', (event) => {
+nameForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!pendingHighScore) return;
+
+    nameSaveBtn.disabled = true;
+    setNameModalStatus('saveRecordPending');
 
     const trimmedName = nameInput.value.trim();
     const entry = {
@@ -1211,13 +1340,15 @@ nameForm.addEventListener('submit', (event) => {
         score: pendingHighScore.score
     };
 
-    highScores = [...highScores, entry]
-        .sort((a, b) => b.score - a.score)
-        .slice(0, MAX_HIGH_SCORES);
-    saveHighScores();
-    pendingHighScore = null;
-    closeNameModal();
-    renderLeaderboard();
+    try {
+        await submitHighScore(entry);
+        pendingHighScore = null;
+        closeNameModal();
+    } catch {
+        setNameModalStatus('saveRecordFailed');
+    } finally {
+        nameSaveBtn.disabled = false;
+    }
 });
 
 nameCloseBtn.addEventListener('click', closeNameModal);
@@ -1271,8 +1402,12 @@ canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
 canvas.addEventListener('touchend', handleTouchEnd);
 canvas.addEventListener('touchcancel', handleTouchEnd);
 
+supabaseClient = createSupabaseClient();
 highScores = loadHighScores();
+leaderboardSource = supabaseClient ? 'global' : 'local';
+leaderboardLoading = Boolean(supabaseClient);
 syncLanguageUI();
 updateUI();
 applyStageTheme();
 gameLoop();
+void refreshHighScores();
