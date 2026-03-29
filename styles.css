@@ -166,19 +166,17 @@ body::after {
 
 #bottom-ui {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
-    gap: 16px;
-    flex-wrap: nowrap;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-bottom: 4px;
 }
 
-#bottom-ui {
-    gap: 12px;
-    padding-bottom: 4px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    justify-content: flex-start;
-    scrollbar-width: thin;
+#bottom-ui > button {
+    flex: 1 1 148px;
+    min-width: 136px;
+    max-width: 168px;
 }
 
 .toggle-control {
@@ -527,7 +525,12 @@ button:disabled {
 
     #bottom-ui {
         gap: 8px;
-        justify-content: flex-start;
+    }
+
+    #bottom-ui > button {
+        flex: 1 1 calc(50% - 8px);
+        min-width: 0;
+        max-width: calc(50% - 4px);
     }
 
     .hud-panel {
@@ -560,7 +563,6 @@ button:disabled {
     button {
         width: auto;
         max-width: none;
-        flex: 0 0 auto;
         padding: 10px 8px;
         font-size: clamp(10px, 2.8vw, 12px);
         letter-spacing: 0;
