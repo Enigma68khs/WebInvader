@@ -1709,7 +1709,7 @@ startBtn.addEventListener('click', () => {
 
 restartBtn.addEventListener('click', () => {
     if (!gameStarted) return;
-    init(stage);
+    init(gameOver ? 1 : stage);
 });
 
 pauseBtn.addEventListener('click', () => {
