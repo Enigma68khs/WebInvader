@@ -8,6 +8,7 @@ const startBtn = document.getElementById('start-btn');
 const restartBtn = document.getElementById('restart-btn');
 const pauseBtn = document.getElementById('pause-btn');
 const musicBtn = document.getElementById('music-btn');
+const saveScoreBtn = document.getElementById('save-score-btn');
 const rapidFireCheckbox = document.getElementById('rapid-fire-checkbox');
 const rapidFireLabelEl = document.getElementById('rapid-fire-label');
 const helpBtn = document.getElementById('help-btn');
@@ -55,6 +56,7 @@ let currentLanguage = 'ko';
 let helpOpen = false;
 let nameModalOpen = false;
 let moveTouchId = null;
+let fireTouchIds = new Set();
 let playerExplosion = null;
 let pendingHighScore = null;
 let highScores = [];
@@ -116,6 +118,7 @@ const translations = {
         restart: '다시하기',
         musicOn: '음악켜기',
         musicOff: '음악끄기',
+        saveScore: '기록 저장',
         topScoreLabel: '최고점수',
         globalBoard: '전역 TOP 5',
         localBoard: '로컬 TOP 5',
@@ -129,6 +132,7 @@ const translations = {
         newRecordPrompt: '최고기록을 세웠습니다. 이름을 입력해 주세요.',
         saveRecordPending: '기록을 저장하는 중입니다...',
         saveRecordFailed: '전역 기록 저장에 실패했습니다. 다시 시도해 주세요.',
+        saveRecordFallback: '전역 저장에 실패해 로컬 기록으로 저장했습니다.',
         namePlaceholder: '이름',
         saveRecord: '저장',
         emptyRecord: '아직 기록이 없습니다.',
@@ -162,6 +166,7 @@ const translations = {
         restart: '重新开始',
         musicOn: '开启音乐',
         musicOff: '关闭音乐',
+        saveScore: '保存记录',
         topScoreLabel: '最高分',
         globalBoard: '全球 TOP 5',
         localBoard: '本地 TOP 5',
@@ -175,6 +180,7 @@ const translations = {
         newRecordPrompt: '你打入了排行榜。请输入名字。',
         saveRecordPending: '正在保存记录...',
         saveRecordFailed: '保存全球记录失败，请重试。',
+        saveRecordFallback: '全球保存失败，已改为保存到本地记录。',
         namePlaceholder: '名字',
         saveRecord: '保存',
         emptyRecord: '暂无记录。',
@@ -208,6 +214,7 @@ const translations = {
         restart: 'Restart',
         musicOn: 'Music On',
         musicOff: 'Music Off',
+        saveScore: 'Save Score',
         topScoreLabel: 'Top Score',
         globalBoard: 'Global Top 5',
         localBoard: 'Local Top 5',
@@ -221,6 +228,7 @@ const translations = {
         newRecordPrompt: 'You made the leaderboard. Enter your name.',
         saveRecordPending: 'Saving your record...',
         saveRecordFailed: 'Failed to save the global record. Please try again.',
+        saveRecordFallback: 'Global save failed, so the score was saved locally instead.',
         namePlaceholder: 'Name',
         saveRecord: 'Save',
         emptyRecord: 'No records yet.',
@@ -248,6 +256,12 @@ function syncHelpPanelVisibility() {
 function syncNameModalVisibility() {
     nameModal.hidden = !nameModalOpen;
     nameModal.setAttribute('aria-hidden', String(!nameModalOpen));
+}
+
+function syncPendingScoreControls() {
+    const hasPendingHighScore = Boolean(pendingHighScore);
+    saveScoreBtn.hidden = !hasPendingHighScore;
+    saveScoreBtn.disabled = !hasPendingHighScore;
 }
 
 function sanitizeHighScoreEntries(entries) {
@@ -360,17 +374,23 @@ async function submitHighScore(entry) {
             .insert([{ player_name: normalizedEntry.name, score: normalizedEntry.score }]);
 
         if (error) {
-            throw error;
+            highScores = mergeHighScoreEntry(normalizedEntry);
+            saveHighScores();
+            leaderboardSource = 'local';
+            leaderboardLoading = false;
+            renderLeaderboard();
+            return { storedRemotely: false };
         }
 
         await refreshHighScores();
-        return;
+        return { storedRemotely: true };
     }
 
     highScores = mergeHighScoreEntry(normalizedEntry);
     saveHighScores();
     leaderboardSource = 'local';
     renderLeaderboard();
+    return { storedRemotely: false };
 }
 
 function isHighScore(scoreValue) {
@@ -403,6 +423,15 @@ function maybePromptHighScore() {
 
     pendingHighScore = { score };
     nameInput.value = '';
+    setNameModalStatus();
+    nameModalOpen = true;
+    syncNameModalVisibility();
+    syncPendingScoreControls();
+}
+
+function openPendingHighScoreModal() {
+    if (!pendingHighScore) return;
+
     setNameModalStatus();
     nameModalOpen = true;
     syncNameModalVisibility();
@@ -641,9 +670,11 @@ function init(startStage = stage) {
     bulletReady = true;
     enemyDirection = 1;
     moveTouchId = null;
+    fireTouchIds = new Set();
     playerExplosion = null;
     pendingHighScore = null;
     closeNameModal();
+    syncPendingScoreControls();
     syncLanguageUI();
     updateUI();
     applyStageTheme();
@@ -752,6 +783,7 @@ function syncLanguageUI() {
     pauseBtn.textContent = paused ? text.resume : text.pause;
     restartBtn.textContent = text.restart;
     musicBtn.textContent = musicOn ? text.musicOff : text.musicOn;
+    saveScoreBtn.textContent = text.saveScore;
     rapidFireLabelEl.textContent = text.rapidFire;
     rapidFireCheckbox.checked = rapidFireEnabled;
     helpBtn.textContent = text.help;
@@ -775,6 +807,7 @@ function syncLanguageUI() {
     syncNameModalVisibility();
     renderLeaderboard();
     syncStageControls();
+    syncPendingScoreControls();
 }
 
 function getStageTheme() {
@@ -1095,6 +1128,7 @@ function handleTouchStart(event) {
             moveTouchId = touch.identifier;
             movePlayerToClientX(touch.clientX);
         } else if (touch.identifier !== moveTouchId) {
+            fireTouchIds.add(touch.identifier);
             shootBullet();
         }
     }
@@ -1113,14 +1147,20 @@ function handleTouchMove(event) {
 }
 
 function handleTouchEnd(event) {
+    for (const touch of event.changedTouches) {
+        fireTouchIds.delete(touch.identifier);
+    }
+
     const moveTouchEnded = Array.from(event.changedTouches).some(touch => touch.identifier === moveTouchId);
     if (!moveTouchEnded) return;
 
-    const remainingTouch = Array.from(event.touches)[0];
-    moveTouchId = remainingTouch ? remainingTouch.identifier : null;
+    const remainingTouches = Array.from(event.touches);
+    const remainingMoveTouch = remainingTouches.find(touch => !fireTouchIds.has(touch.identifier)) || null;
 
-    if (remainingTouch) {
-        movePlayerToClientX(remainingTouch.clientX);
+    moveTouchId = remainingMoveTouch ? remainingMoveTouch.identifier : null;
+
+    if (remainingMoveTouch) {
+        movePlayerToClientX(remainingMoveTouch.clientX);
     }
 }
 
@@ -1341,9 +1381,13 @@ nameForm.addEventListener('submit', async (event) => {
     };
 
     try {
-        await submitHighScore(entry);
+        const result = await submitHighScore(entry);
         pendingHighScore = null;
         closeNameModal();
+        syncPendingScoreControls();
+        if (!result.storedRemotely) {
+            window.alert(getText('saveRecordFallback'));
+        }
     } catch {
         setNameModalStatus('saveRecordFailed');
     } finally {
@@ -1362,6 +1406,10 @@ nameModal.addEventListener('click', (event) => {
 helpBtn.addEventListener('click', () => {
     helpOpen = !helpOpen;
     syncHelpPanelVisibility();
+});
+
+saveScoreBtn.addEventListener('click', () => {
+    openPendingHighScoreModal();
 });
 
 helpCloseBtn.addEventListener('click', () => {
