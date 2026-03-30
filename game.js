@@ -499,6 +499,7 @@ function syncStageControls() {
     stageDownBtn.disabled = !stageControlsEnabled;
     stageUpBtn.disabled = !stageControlsEnabled;
     startBtn.disabled = !stageControlsEnabled;
+    pauseBtn.disabled = !gameStarted || gameOver;
     restartBtn.disabled = !gameStarted || (!paused && !gameOver);
 }
 
@@ -1806,7 +1807,7 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         shootBullet();
     }
-    if (gameStarted && (e.key === 'p' || e.key === 'P')) {
+    if (gameStarted && !gameOver && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
         paused = !paused;
         syncBackgroundMusic();
@@ -1837,7 +1838,7 @@ restartBtn.addEventListener('click', () => {
 });
 
 pauseBtn.addEventListener('click', () => {
-    if (!gameStarted) return;
+    if (!gameStarted || gameOver) return;
     paused = !paused;
     syncBackgroundMusic();
     syncLanguageUI();
