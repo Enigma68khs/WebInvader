@@ -40,6 +40,8 @@ const marqueeHighScoreEl = document.getElementById('marquee-high-score');
 let player = { x: canvas.width / 2 - 25, y: canvas.height - 50, width: 50, height: 30 };
 let bullets = [];
 let enemies = [];
+let specialEnemies = [];
+let enemyBombs = [];
 let score = 0;
 let stage = 1;
 let gameOver = false;
@@ -61,9 +63,13 @@ let playerExplosion = null;
 let pendingHighScore = null;
 let highScores = [];
 let supabaseClient = null;
+let frameCount = 0;
 let leaderboardLoading = false;
 let leaderboardSource = 'local';
 let nameModalStatusKey = null;
+let remainingSpecialSpawns = 0;
+let specialSpawnCooldown = 0;
+let specialEnemyIdCounter = 0;
 const languageOrder = ['ko', 'zh', 'en'];
 const HIGH_SCORE_STORAGE_KEY = 'webinvader.highscores.v1';
 const MAX_HIGH_SCORES = 5;
@@ -147,7 +153,7 @@ const translations = {
         helpDesktopTitle: '키보드 조작',
         helpDesktopBody: '왼쪽/오른쪽 방향키로 이동하고 스페이스바로 발사합니다. P 키 또는 일시 정지 버튼으로 멈출 수 있습니다.',
         helpTipTitle: '플레이 팁',
-        helpTipBody: '총알은 벽과 천장에 튕깁니다. 반사 각도를 활용하면 위쪽이나 가장자리 적도 쉽게 맞출 수 있습니다.'
+        helpTipBody: '총알은 벽과 천장에 튕깁니다. 반사 각도를 활용하면 위쪽이나 가장자리 적도 쉽게 맞출 수 있습니다. 특수괴물은 폭탄을 떨어뜨리며 여러 번 맞혀야 폭파됩니다.'
     },
     zh: {
         documentTitle: '网页入侵者游戏',
@@ -195,7 +201,7 @@ const translations = {
         helpDesktopTitle: '键盘操作',
         helpDesktopBody: '使用左右方向键移动，按空格键发射。按 P 键或暂停按钮可以暂停游戏。',
         helpTipTitle: '游玩提示',
-        helpTipBody: '子弹会在墙壁和顶部反弹。提前计算反弹路线，可以更快击中高处或边缘的敌人。'
+        helpTipBody: '子弹会在墙壁和顶部反弹。提前计算反弹路线，可以更快击中高处或边缘的敌人。特殊怪物会投下炸弹，而且需要多次命中才会爆炸。'
     },
     en: {
         documentTitle: 'Web Invader Game',
@@ -243,7 +249,7 @@ const translations = {
         helpDesktopTitle: 'Keyboard Controls',
         helpDesktopBody: 'Use the left and right arrow keys to move and press the space bar to fire. Press P or the pause button to pause the game.',
         helpTipTitle: 'Play Tip',
-        helpTipBody: 'Bullets bounce off the walls and ceiling. Use the rebound angle to hit enemies near the top or edges faster.'
+        helpTipBody: 'Bullets bounce off the walls and ceiling. Use the rebound angle to hit enemies near the top or edges faster. Special monsters drop bombs and take several hits before they explode.'
     }
 };
 
@@ -683,9 +689,54 @@ const stageFormations = [
         '1011001101'
     ]
 ];
+const stageSpecialConfigs = [
+    {
+        name: { ko: '네온 감시자', zh: '霓虹监察者', en: 'Neon Sentinel' },
+        body: '#5af7ff',
+        accent: '#c8feff',
+        glow: 'rgba(90, 247, 255, 0.28)',
+        bomb: '#62f4ff',
+        style: 'sentinel'
+    },
+    {
+        name: { ko: '선셋 포트리스', zh: '落日堡垒', en: 'Sunset Fortress' },
+        body: '#ff9b54',
+        accent: '#ffe2a8',
+        glow: 'rgba(255, 155, 84, 0.28)',
+        bomb: '#ffd166',
+        style: 'fortress'
+    },
+    {
+        name: { ko: '심해 레비아탄', zh: '深海利维坦', en: 'Deepsea Leviathan' },
+        body: '#53d3ff',
+        accent: '#86fff1',
+        glow: 'rgba(83, 211, 255, 0.24)',
+        bomb: '#86fff1',
+        style: 'leviathan'
+    },
+    {
+        name: { ko: '용암 기갑병', zh: '熔火装甲兵', en: 'Lava Juggernaut' },
+        body: '#ff6b3d',
+        accent: '#ffd7a1',
+        glow: 'rgba(255, 107, 61, 0.24)',
+        bomb: '#ffb066',
+        style: 'juggernaut'
+    },
+    {
+        name: { ko: '리프트 군주', zh: '裂隙领主', en: 'Rift Overlord' },
+        body: '#c084ff',
+        accent: '#ff90e8',
+        glow: 'rgba(192, 132, 255, 0.28)',
+        bomb: '#ff90e8',
+        style: 'overlord'
+    }
+];
 let enemyDirection = 1;
 const bulletSpeed = 3.25;
 const playerSpeed = 5;
+const specialEnemyWidth = 64;
+const specialEnemyHeight = 44;
+const bombRadius = 7;
 
 function changeStageSelection(direction) {
     if (gameStarted && !paused) return;
@@ -699,6 +750,8 @@ function init(startStage = stage) {
     player.x = canvas.width / 2 - 25;
     bullets = [];
     enemies = [];
+    specialEnemies = [];
+    enemyBombs = [];
     score = 0;
     stage = startStage;
     gameOver = false;
@@ -712,6 +765,10 @@ function init(startStage = stage) {
     fireTouchIds = new Set();
     playerExplosion = null;
     pendingHighScore = null;
+    frameCount = 0;
+    remainingSpecialSpawns = getSpecialSpawnCount(stage);
+    specialSpawnCooldown = 150;
+    specialEnemyIdCounter = 0;
     closeNameModal();
     syncPendingScoreControls();
     syncLanguageUI();
@@ -755,6 +812,14 @@ function draw() {
             drawEnemy(enemy.x, enemy.y);
         }
     });
+
+    specialEnemies.forEach(enemy => {
+        if (enemy.alive) {
+            drawSpecialEnemy(enemy);
+        }
+    });
+
+    enemyBombs.forEach(drawEnemyBomb);
 
     if (!gameStarted) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
@@ -841,8 +906,44 @@ function getStageTheme() {
     return stageThemes[(stage - 1) % stageThemes.length];
 }
 
+function getStageSpecialConfig(stageNumber) {
+    return stageSpecialConfigs[(stageNumber - 1) % stageSpecialConfigs.length];
+}
+
+function getLocalizedSpecialEnemyName(stageNumber) {
+    return getStageSpecialConfig(stageNumber).name[currentLanguage];
+}
+
 function getStageFormation(stageNumber) {
     return stageFormations[(stageNumber - 1) % stageFormations.length];
+}
+
+function getSpecialSpawnCount(stageNumber) {
+    return Math.min(5, 1 + Math.floor(stageNumber / 1.5));
+}
+
+function getSpecialEnemyMaxHealth(stageNumber) {
+    return 2 + stageNumber;
+}
+
+function getSpecialEnemySpeed(stageNumber) {
+    return 1.1 + stageNumber * 0.18;
+}
+
+function getSpecialEnemyBombSpeed(stageNumber) {
+    return 2.4 + stageNumber * 0.22;
+}
+
+function getSpecialEnemySpawnDelay(stageNumber) {
+    return Math.max(95, 230 - stageNumber * 18);
+}
+
+function getSpecialEnemyFireDelay(stageNumber) {
+    return Math.max(80, 180 - stageNumber * 14);
+}
+
+function getSpecialEnemyConcurrentLimit(stageNumber) {
+    return Math.min(3, 1 + Math.floor(stageNumber / 2));
 }
 
 function createEnemiesForStage(stageNumber) {
@@ -867,6 +968,42 @@ function createEnemiesForStage(stageNumber) {
     });
 
     return spawnedEnemies;
+}
+
+function createSpecialEnemy(stageNumber) {
+    const spawnOnLeft = Math.random() < 0.5;
+    const y = 76 + Math.random() * 84;
+    const direction = spawnOnLeft ? 1 : -1;
+    const x = spawnOnLeft ? 30 : canvas.width - specialEnemyWidth - 30;
+
+    return {
+        id: ++specialEnemyIdCounter,
+        x,
+        y,
+        width: specialEnemyWidth,
+        height: specialEnemyHeight,
+        alive: true,
+        direction,
+        speed: getSpecialEnemySpeed(stageNumber),
+        health: getSpecialEnemyMaxHealth(stageNumber),
+        maxHealth: getSpecialEnemyMaxHealth(stageNumber),
+        bobOffset: Math.random() * Math.PI * 2,
+        fireCooldown: getSpecialEnemyFireDelay(stageNumber) + Math.floor(Math.random() * 50)
+    };
+}
+
+function maybeSpawnSpecialEnemy() {
+    if (remainingSpecialSpawns <= 0) return;
+    if (specialEnemies.filter(enemy => enemy.alive).length >= getSpecialEnemyConcurrentLimit(stage)) return;
+
+    if (specialSpawnCooldown > 0) {
+        specialSpawnCooldown--;
+        return;
+    }
+
+    specialEnemies.push(createSpecialEnemy(stage));
+    remainingSpecialSpawns--;
+    specialSpawnCooldown = getSpecialEnemySpawnDelay(stage);
 }
 
 function applyStageTheme() {
@@ -1011,10 +1148,10 @@ function drawGrid(theme) {
 function drawStageLabel(theme) {
     ctx.save();
     ctx.fillStyle = 'rgba(3, 6, 10, 0.38)';
-    ctx.fillRect(18, 14, 190, 44);
+    ctx.fillRect(18, 14, 274, 64);
     ctx.strokeStyle = theme.accent;
     ctx.lineWidth = 2;
-    ctx.strokeRect(18, 14, 190, 44);
+    ctx.strokeRect(18, 14, 274, 64);
     ctx.fillStyle = theme.detail;
     ctx.font = 'bold 14px "Courier New", monospace';
     ctx.textAlign = 'left';
@@ -1022,6 +1159,9 @@ function drawStageLabel(theme) {
     ctx.fillStyle = theme.accent;
     ctx.font = '12px "Courier New", monospace';
     ctx.fillText(getLocalizedThemeName(theme), 32, 49);
+    ctx.fillStyle = 'rgba(248, 241, 215, 0.9)';
+    ctx.font = '11px "Courier New", monospace';
+    ctx.fillText(`${getLocalizedSpecialEnemyName(stage)}  HP ${getSpecialEnemyMaxHealth(stage)}  x${getSpecialSpawnCount(stage)}`, 32, 66);
     ctx.restore();
 }
 
@@ -1134,6 +1274,98 @@ function drawEnemy(x, y) {
     ctx.fillStyle = palette.eye;
     ctx.fillRect(x + 10, y + 10, 4, 4);
     ctx.fillRect(x + 26, y + 10, 4, 4);
+}
+
+function drawEnergyBar(x, y, width, progress, color) {
+    ctx.fillStyle = 'rgba(3, 8, 12, 0.72)';
+    ctx.fillRect(x, y, width, 6);
+    ctx.fillStyle = color;
+    ctx.fillRect(x + 1, y + 1, Math.max(0, (width - 2) * progress), 4);
+}
+
+function drawSpecialEnemy(enemy) {
+    const config = getStageSpecialConfig(stage);
+    const wobble = Math.sin(frameCount * 0.08 + enemy.bobOffset) * 1.8;
+    const x = enemy.x;
+    const y = enemy.y + wobble;
+
+    ctx.save();
+    ctx.shadowColor = config.glow;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = config.body;
+
+    if (config.style === 'sentinel') {
+        ctx.fillRect(x + 12, y + 6, 40, 10);
+        ctx.fillRect(x + 6, y + 16, 52, 12);
+        ctx.fillRect(x + 14, y + 28, 36, 8);
+        ctx.fillRect(x, y + 18, 6, 10);
+        ctx.fillRect(x + 58, y + 18, 6, 10);
+    } else if (config.style === 'fortress') {
+        ctx.fillRect(x + 6, y + 6, 52, 12);
+        ctx.fillRect(x, y + 18, 64, 12);
+        ctx.fillRect(x + 10, y + 30, 18, 10);
+        ctx.fillRect(x + 36, y + 30, 18, 10);
+    } else if (config.style === 'leviathan') {
+        ctx.fillRect(x + 16, y + 4, 30, 8);
+        ctx.fillRect(x + 8, y + 12, 46, 10);
+        ctx.fillRect(x + 4, y + 22, 56, 10);
+        ctx.fillRect(x, y + 32, 16, 8);
+        ctx.fillRect(x + 48, y + 32, 16, 8);
+    } else if (config.style === 'juggernaut') {
+        ctx.fillRect(x + 16, y + 2, 32, 10);
+        ctx.fillRect(x + 8, y + 12, 48, 12);
+        ctx.fillRect(x, y + 24, 64, 12);
+        ctx.fillRect(x + 12, y + 36, 12, 8);
+        ctx.fillRect(x + 40, y + 36, 12, 8);
+    } else {
+        ctx.fillRect(x + 24, y, 16, 8);
+        ctx.fillRect(x + 10, y + 8, 44, 10);
+        ctx.fillRect(x, y + 18, 64, 12);
+        ctx.fillRect(x + 10, y + 30, 16, 10);
+        ctx.fillRect(x + 38, y + 30, 16, 10);
+    }
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = config.accent;
+    ctx.fillRect(x + 18, y + 12, 10, 6);
+    ctx.fillRect(x + 36, y + 12, 10, 6);
+    ctx.fillRect(x + 28, y + 24, 8, 6);
+
+    drawEnergyBar(x + 6, y - 10, enemy.width - 12, enemy.health / enemy.maxHealth, config.accent);
+    ctx.restore();
+}
+
+function drawEnemyBomb(bomb) {
+    ctx.save();
+    ctx.fillStyle = bomb.color;
+    ctx.beginPath();
+    ctx.arc(bomb.x, bomb.y, bombRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 248, 220, 0.7)';
+    ctx.beginPath();
+    ctx.arc(bomb.x - 2, bomb.y - 2, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function launchEnemyBomb(enemy) {
+    const config = getStageSpecialConfig(stage);
+    const originX = enemy.x + enemy.width / 2;
+    const originY = enemy.y + enemy.height;
+    const targetX = player.x + player.width / 2;
+    const targetY = player.y + player.height / 2;
+    const dx = targetX - originX;
+    const dy = targetY - originY;
+    const magnitude = Math.hypot(dx, dy) || 1;
+    const speed = getSpecialEnemyBombSpeed(stage);
+
+    enemyBombs.push({
+        x: originX,
+        y: originY,
+        vx: (dx / magnitude) * speed,
+        vy: Math.max(1.9, (dy / magnitude) * speed),
+        color: config.bomb
+    });
 }
 
 function createBullet() {
@@ -1276,11 +1508,86 @@ function handleBulletCollisions() {
         if (bulletConsumed) {
             continue;
         }
+
+        for (let sIndex = specialEnemies.length - 1; sIndex >= 0; sIndex--) {
+            const enemy = specialEnemies[sIndex];
+
+            if (!enemy.alive) continue;
+
+            if (bullet.x < enemy.x + enemy.width &&
+                bullet.x + bulletWidth > enemy.x &&
+                bullet.y < enemy.y + enemy.height &&
+                bullet.y + bulletHeight > enemy.y) {
+                enemy.health -= 1;
+                bullets.splice(bIndex, 1);
+                bulletReady = true;
+                playExplosionSound();
+
+                if (enemy.health <= 0) {
+                    enemy.alive = false;
+                    score += 50 + stage * 10;
+                    updateUI();
+                }
+
+                bulletConsumed = true;
+                break;
+            }
+        }
+    }
+}
+
+function updateSpecialEnemies() {
+    maybeSpawnSpecialEnemy();
+
+    specialEnemies.forEach(enemy => {
+        if (!enemy.alive) return;
+
+        enemy.x += enemy.direction * enemy.speed;
+
+        if (enemy.x <= 12 || enemy.x + enemy.width >= canvas.width - 12) {
+            enemy.direction *= -1;
+            enemy.x = Math.max(12, Math.min(canvas.width - enemy.width - 12, enemy.x));
+            enemy.y = Math.min(player.y - 130, enemy.y + 10);
+        }
+
+        enemy.fireCooldown--;
+        if (enemy.fireCooldown <= 0) {
+            launchEnemyBomb(enemy);
+            enemy.fireCooldown = getSpecialEnemyFireDelay(stage) + Math.floor(Math.random() * 40);
+        }
+    });
+}
+
+function updateEnemyBombs() {
+    for (let i = enemyBombs.length - 1; i >= 0; i--) {
+        const bomb = enemyBombs[i];
+        bomb.x += bomb.vx;
+        bomb.y += bomb.vy;
+
+        const collidesWithPlayer =
+            bomb.x + bombRadius > player.x &&
+            bomb.x - bombRadius < player.x + player.width &&
+            bomb.y + bombRadius > player.y &&
+            bomb.y - bombRadius < player.y + player.height;
+
+        if (collidesWithPlayer) {
+            triggerPlayerDefeat();
+            return;
+        }
+
+        if (
+            bomb.y - bombRadius > canvas.height ||
+            bomb.x + bombRadius < 0 ||
+            bomb.x - bombRadius > canvas.width
+        ) {
+            enemyBombs.splice(i, 1);
+        }
     }
 }
 
 function update() {
     if (!gameStarted || gameOver) return;
+    frameCount++;
 
     // 플레이어 이동
     if (keys['ArrowLeft'] && player.x > 0) player.x -= playerSpeed;
@@ -1288,6 +1595,8 @@ function update() {
 
     // 총알 이동
     updateBullets();
+    updateSpecialEnemies();
+    updateEnemyBombs();
 
     // 적 이동
     let moveDown = false;
@@ -1318,9 +1627,19 @@ function update() {
             triggerPlayerDefeat();
         }
     });
+    specialEnemies.forEach(enemy => {
+        if (enemy.alive && enemy.y + enemy.height >= player.y) {
+            triggerPlayerDefeat();
+        }
+    });
 
     // 다음 스테이지
-    if (enemies.every(enemy => !enemy.alive)) {
+    if (
+        enemies.every(enemy => !enemy.alive) &&
+        specialEnemies.every(enemy => !enemy.alive) &&
+        remainingSpecialSpawns === 0 &&
+        enemyBombs.length === 0
+    ) {
         if (stage < 5) {
             stage++;
             updateUI();
@@ -1338,6 +1657,11 @@ function update() {
 function nextStage() {
     applyStageTheme();
     enemies = createEnemiesForStage(stage);
+    specialEnemies = [];
+    enemyBombs = [];
+    remainingSpecialSpawns = getSpecialSpawnCount(stage);
+    specialSpawnCooldown = 120;
+    specialEnemyIdCounter = 0;
 }
 
 function gameLoop() {
