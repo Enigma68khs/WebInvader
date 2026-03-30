@@ -146,14 +146,14 @@ const translations = {
         languageButton: '한국어',
         closeLabel: '닫기',
         helpTitle: '사용방법',
-        helpIntro: '방향키와 스페이스바 또는 터치 조작으로 모든 적을 물리치세요.',
+        helpIntro: '방향키와 스페이스바 또는 터치 조작으로 일반 적과 특수괴물을 모두 물리치세요.',
         startPrompt: '시작 버튼을 눌러 선택한 스테이지에서 게임을 시작하세요.',
         helpMobileTitle: '핸드폰 조작',
-        helpMobileBody: '화면을 누른 채 좌우로 움직이면 우주선이 따라 움직입니다. 그 상태에서 다른 손가락으로 탭하면 총알이 발사됩니다.',
+        helpMobileBody: '화면을 누른 채 좌우로 움직이면 우주선이 따라 움직입니다. 그 상태에서 다른 손가락으로 탭하면 총알이 발사됩니다. 특수괴물이 던지는 폭탄은 반드시 피해야 합니다.',
         helpDesktopTitle: '키보드 조작',
-        helpDesktopBody: '왼쪽/오른쪽 방향키로 이동하고 스페이스바로 발사합니다. P 키 또는 일시 정지 버튼으로 멈출 수 있습니다.',
+        helpDesktopBody: '왼쪽/오른쪽 방향키로 이동하고 스페이스바로 발사합니다. P 키 또는 일시 정지 버튼으로 멈출 수 있습니다. 폭탄에 맞으면 즉시 게임 오버입니다.',
         helpTipTitle: '플레이 팁',
-        helpTipBody: '총알은 벽과 천장에 튕깁니다. 반사 각도를 활용하면 위쪽이나 가장자리 적도 쉽게 맞출 수 있습니다. 특수괴물은 폭탄을 떨어뜨리며 여러 번 맞혀야 폭파됩니다.'
+        helpTipBody: '총알은 벽과 천장에 튕깁니다. 특수괴물은 스테이지가 올라갈수록 더 많이 나오고 더 단단해집니다. 라이프 에너지를 모두 깎아야 폭파되므로 반사 각도까지 활용해 빠르게 처리하세요.'
     },
     zh: {
         documentTitle: '网页入侵者游戏',
@@ -194,14 +194,14 @@ const translations = {
         languageButton: '中文',
         closeLabel: '关闭',
         helpTitle: '使用方法',
-        helpIntro: '使用方向键、空格键或触屏操作，消灭所有敌人。',
+        helpIntro: '使用方向键、空格键或触屏操作，消灭所有普通敌人和特殊怪物。',
         startPrompt: '点击开始按钮，从所选关卡开始游戏。',
         helpMobileTitle: '手机操作',
-        helpMobileBody: '按住屏幕后左右滑动即可移动飞船。保持按住时，再用另一根手指点一下，就会发射子弹。',
+        helpMobileBody: '按住屏幕后左右滑动即可移动飞船。保持按住时，再用另一根手指点一下，就会发射子弹。特殊怪物投下的炸弹必须立刻躲开。',
         helpDesktopTitle: '键盘操作',
-        helpDesktopBody: '使用左右方向键移动，按空格键发射。按 P 键或暂停按钮可以暂停游戏。',
+        helpDesktopBody: '使用左右方向键移动，按空格键发射。按 P 键或暂停按钮可以暂停游戏。被炸弹击中会立刻结束游戏。',
         helpTipTitle: '游玩提示',
-        helpTipBody: '子弹会在墙壁和顶部反弹。提前计算反弹路线，可以更快击中高处或边缘的敌人。特殊怪物会投下炸弹，而且需要多次命中才会爆炸。'
+        helpTipBody: '子弹会在墙壁和顶部反弹。关卡越高，特殊怪物出现得越多、生命越高。必须把它们的生命能量全部打空，它们才会爆炸。'
     },
     en: {
         documentTitle: 'Web Invader Game',
@@ -242,14 +242,14 @@ const translations = {
         languageButton: 'English',
         closeLabel: 'Close',
         helpTitle: 'How To Play',
-        helpIntro: 'Defeat all enemies using the arrow keys, the space bar, or touch controls.',
+        helpIntro: 'Defeat every regular enemy and special monster using the arrow keys, the space bar, or touch controls.',
         startPrompt: 'Press Start to begin the game from the selected stage.',
         helpMobileTitle: 'Phone Controls',
-        helpMobileBody: 'Press and hold the screen, then drag left or right to move the ship. While holding, tap with another finger to fire.',
+        helpMobileBody: 'Press and hold the screen, then drag left or right to move the ship. While holding, tap with another finger to fire. Dodge every bomb dropped by special monsters.',
         helpDesktopTitle: 'Keyboard Controls',
-        helpDesktopBody: 'Use the left and right arrow keys to move and press the space bar to fire. Press P or the pause button to pause the game.',
+        helpDesktopBody: 'Use the left and right arrow keys to move and press the space bar to fire. Press P or the pause button to pause the game. A bomb hit ends the run immediately.',
         helpTipTitle: 'Play Tip',
-        helpTipBody: 'Bullets bounce off the walls and ceiling. Use the rebound angle to hit enemies near the top or edges faster. Special monsters drop bombs and take several hits before they explode.'
+        helpTipBody: 'Bullets bounce off the walls and ceiling. Higher stages spawn more special monsters with more life energy, so use rebounds to burn down their health before they can flood the screen with bombs.'
     }
 };
 
