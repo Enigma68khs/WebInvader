@@ -42,6 +42,7 @@ const PLAYER_BASE_WIDTH = 50;
 const PLAYER_BASE_HEIGHT = 30;
 const PLAYER_WIDTH = Math.round(PLAYER_BASE_WIDTH * PLAYER_SCALE);
 const PLAYER_HEIGHT = Math.round(PLAYER_BASE_HEIGHT * PLAYER_SCALE);
+const MAX_STAGE = 7;
 
 let player = {
     x: canvas.width / 2 - PLAYER_WIDTH / 2,
@@ -661,6 +662,36 @@ const stageThemes = [
         shellGlow: 'rgba(192, 132, 255, 0.3)',
         cabinetGlow: 'rgba(192, 132, 255, 0.22)',
         motif: 'rift'
+    },
+    {
+        name: { ko: '오로라 볼트', zh: '极光风暴', en: 'Aurora Volt' },
+        skyTop: '#041d1e',
+        skyBottom: '#01070d',
+        bloom: 'rgba(123, 255, 214, 0.24)',
+        grid: 'rgba(112, 255, 221, 0.14)',
+        glow: 'rgba(61, 240, 255, 0.14)',
+        accent: '#7bffd6',
+        detail: '#d9fff5',
+        shellTop: '#245152',
+        shellBottom: '#0b1d27',
+        shellGlow: 'rgba(123, 255, 214, 0.3)',
+        cabinetGlow: 'rgba(61, 240, 255, 0.22)',
+        motif: 'aurora'
+    },
+    {
+        name: { ko: '아이언 메일스트롬', zh: '钢铁风暴眼', en: 'Iron Maelstrom' },
+        skyTop: '#171717',
+        skyBottom: '#030303',
+        bloom: 'rgba(255, 70, 70, 0.2)',
+        grid: 'rgba(255, 120, 120, 0.12)',
+        glow: 'rgba(255, 210, 120, 0.1)',
+        accent: '#ff6e6e',
+        detail: '#ffe0a3',
+        shellTop: '#4d3831',
+        shellBottom: '#160f0d',
+        shellGlow: 'rgba(255, 110, 110, 0.32)',
+        cabinetGlow: 'rgba(255, 180, 90, 0.2)',
+        motif: 'storm'
     }
 ];
 const stageFormations = [
@@ -698,6 +729,20 @@ const stageFormations = [
         '0011111100',
         '0111111110',
         '1011001101'
+    ],
+    [
+        '1110011111',
+        '1111111111',
+        '0111111110',
+        '1111111111',
+        '1110011111'
+    ],
+    [
+        '1111111111',
+        '1110110111',
+        '1111111111',
+        '1101111011',
+        '1111111111'
     ]
 ];
 const stageSpecialConfigs = [
@@ -740,6 +785,22 @@ const stageSpecialConfigs = [
         glow: 'rgba(192, 132, 255, 0.28)',
         bomb: '#ff90e8',
         style: 'overlord'
+    },
+    {
+        name: { ko: '오로라 파동체', zh: '极光脉冲体', en: 'Aurora Warden' },
+        body: '#7bffd6',
+        accent: '#d9fff5',
+        glow: 'rgba(123, 255, 214, 0.28)',
+        bomb: '#8fffe8',
+        style: 'sentinel'
+    },
+    {
+        name: { ko: '메일스트롬 타이탄', zh: '风暴泰坦', en: 'Maelstrom Titan' },
+        body: '#ff6e6e',
+        accent: '#ffe0a3',
+        glow: 'rgba(255, 110, 110, 0.3)',
+        bomb: '#ffc16e',
+        style: 'juggernaut'
     }
 ];
 let enemyDirection = 1;
@@ -752,7 +813,7 @@ const bombRadius = 7;
 function changeStageSelection(direction) {
     if (gameStarted && !paused) return;
 
-    stage = Math.max(1, Math.min(stageThemes.length, stage + direction));
+    stage = Math.max(1, Math.min(MAX_STAGE, stage + direction));
     updateUI();
     applyStageTheme();
 }
@@ -914,11 +975,11 @@ function syncLanguageUI() {
 }
 
 function getStageTheme() {
-    return stageThemes[(stage - 1) % stageThemes.length];
+    return stageThemes[stage - 1] || stageThemes[stageThemes.length - 1];
 }
 
 function getStageSpecialConfig(stageNumber) {
-    return stageSpecialConfigs[(stageNumber - 1) % stageSpecialConfigs.length];
+    return stageSpecialConfigs[stageNumber - 1] || stageSpecialConfigs[stageSpecialConfigs.length - 1];
 }
 
 function getLocalizedSpecialEnemyName(stageNumber) {
@@ -926,35 +987,43 @@ function getLocalizedSpecialEnemyName(stageNumber) {
 }
 
 function getStageFormation(stageNumber) {
-    return stageFormations[(stageNumber - 1) % stageFormations.length];
+    return stageFormations[stageNumber - 1] || stageFormations[stageFormations.length - 1];
 }
 
 function getSpecialSpawnCount(stageNumber) {
-    return Math.min(5, 1 + Math.floor(stageNumber / 1.5));
+    return Math.min(7, 1 + Math.floor(stageNumber * 0.9));
 }
 
 function getSpecialEnemyMaxHealth(stageNumber) {
-    return 2 + stageNumber;
+    return 2 + stageNumber + Math.floor(stageNumber / 3);
 }
 
 function getSpecialEnemySpeed(stageNumber) {
-    return 1.1 + stageNumber * 0.18;
+    return 1.05 + stageNumber * 0.22;
 }
 
 function getSpecialEnemyBombSpeed(stageNumber) {
-    return 2.4 + stageNumber * 0.22;
+    return 2.5 + stageNumber * 0.28;
 }
 
 function getSpecialEnemySpawnDelay(stageNumber) {
-    return Math.max(95, 230 - stageNumber * 18);
+    return Math.max(70, 230 - stageNumber * 20);
 }
 
 function getSpecialEnemyFireDelay(stageNumber) {
-    return Math.max(80, 180 - stageNumber * 14);
+    return Math.max(60, 180 - stageNumber * 16);
 }
 
 function getSpecialEnemyConcurrentLimit(stageNumber) {
-    return Math.min(3, 1 + Math.floor(stageNumber / 2));
+    return Math.min(4, 1 + Math.floor((stageNumber + 1) / 2));
+}
+
+function getEnemyAdvanceSpeed(stageNumber) {
+    return 0.45 + stageNumber * 0.4;
+}
+
+function getEnemyDropDistance(stageNumber) {
+    return 18 + Math.floor(stageNumber / 2) * 2;
 }
 
 function createEnemiesForStage(stageNumber) {
@@ -1131,6 +1200,42 @@ function drawThemeMotif(theme) {
             ctx.moveTo(canvas.width * 0.5, 100 + i * 34);
             ctx.lineTo(canvas.width * 0.32, 70 + i * 42);
             ctx.stroke();
+        }
+    }
+
+    if (theme.motif === 'aurora') {
+        for (let band = 0; band < 4; band++) {
+            ctx.strokeStyle = band % 2 === 0 ? 'rgba(123, 255, 214, 0.2)' : 'rgba(217, 255, 245, 0.16)';
+            ctx.lineWidth = 10 - band * 2;
+            ctx.beginPath();
+            for (let x = 0; x <= canvas.width; x += 24) {
+                const y = 70 + band * 34 + Math.sin((x + band * 30) * 0.02) * 18;
+                if (x === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+        }
+    }
+
+    if (theme.motif === 'storm') {
+        ctx.strokeStyle = 'rgba(255, 224, 163, 0.2)';
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 5; i++) {
+            const originX = 110 + i * 130;
+            ctx.beginPath();
+            ctx.moveTo(originX, 30);
+            ctx.lineTo(originX - 18, 95);
+            ctx.lineTo(originX + 10, 95);
+            ctx.lineTo(originX - 24, 170);
+            ctx.stroke();
+        }
+
+        ctx.fillStyle = 'rgba(255, 110, 110, 0.12)';
+        for (let i = 0; i < 7; i++) {
+            ctx.fillRect(40 + i * 108, 190 + (i % 2) * 24, 46, 14);
         }
     }
 
@@ -1382,7 +1487,7 @@ function launchEnemyBomb(enemy) {
     });
 }
 
-function createBullet() {
+function createBullet(muzzleOffsetX = 0) {
     let angle = 0;
     if (keys['ArrowLeft'] && !keys['ArrowRight']) {
         angle = -22;
@@ -1393,7 +1498,7 @@ function createBullet() {
     const radians = angle * (Math.PI / 180);
 
     return {
-        x: player.x + player.width / 2 - bulletWidth / 2,
+        x: player.x + player.width / 2 - bulletWidth / 2 + muzzleOffsetX,
         y: player.y,
         vx: Math.sin(radians) * bulletSpeed,
         vy: -Math.cos(radians) * bulletSpeed
@@ -1406,7 +1511,12 @@ function shootBullet() {
 
     ensureAudioReady();
     bulletReady = false;
-    bullets.push(createBullet());
+    if (!rapidFireEnabled && stage >= 5) {
+        const muzzleOffset = Math.max(8, player.width * 0.2);
+        bullets.push(createBullet(-muzzleOffset), createBullet(muzzleOffset));
+    } else {
+        bullets.push(createBullet());
+    }
     playShootSound();
 }
 
@@ -1616,7 +1726,7 @@ function update() {
     let moveDown = false;
     enemies.forEach(enemy => {
         if (enemy.alive) {
-            enemy.x += enemyDirection * (stage * 0.5);
+            enemy.x += enemyDirection * getEnemyAdvanceSpeed(stage);
             if (enemy.x <= 0 || enemy.x >= canvas.width - enemy.width) {
                 moveDown = true;
             }
@@ -1626,7 +1736,7 @@ function update() {
     if (moveDown) {
         enemies.forEach(enemy => {
             if (enemy.alive) {
-                enemy.y += 20;
+                enemy.y += getEnemyDropDistance(stage);
             }
         });
         enemyDirection *= -1;
@@ -1654,7 +1764,7 @@ function update() {
         remainingSpecialSpawns === 0 &&
         enemyBombs.length === 0
     ) {
-        if (stage < 5) {
+        if (stage < MAX_STAGE) {
             stage++;
             updateUI();
             nextStage();
