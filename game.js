@@ -558,6 +558,8 @@ const enemyRows = 5;
 const enemyCols = 10;
 const enemyWidth = 40;
 const enemyHeight = 30;
+const enemyGapX = 10;
+const enemyGapY = 10;
 const bulletWidth = 4;
 const bulletHeight = 12;
 const enemyPalettes = [
@@ -644,6 +646,43 @@ const stageThemes = [
         motif: 'rift'
     }
 ];
+const stageFormations = [
+    [
+        '0001111000',
+        '0011111100',
+        '0111111110',
+        '1110011111',
+        '1100000011'
+    ],
+    [
+        '1111111111',
+        '1100000011',
+        '1110110111',
+        '1100000011',
+        '1111111111'
+    ],
+    [
+        '1000000001',
+        '1100000011',
+        '1110000111',
+        '1111001111',
+        '1111111111'
+    ],
+    [
+        '1100110011',
+        '1111111111',
+        '0111111110',
+        '0011111100',
+        '0001111000'
+    ],
+    [
+        '1011001101',
+        '0111111110',
+        '0011111100',
+        '0111111110',
+        '1011001101'
+    ]
+];
 let enemyDirection = 1;
 const bulletSpeed = 3.25;
 const playerSpeed = 5;
@@ -680,19 +719,7 @@ function init(startStage = stage) {
     applyStageTheme();
     syncBackgroundMusic();
     syncStageControls();
-
-    // 적 생성
-    for (let row = 0; row < enemyRows; row++) {
-        for (let col = 0; col < enemyCols; col++) {
-            enemies.push({
-                x: col * (enemyWidth + 10) + 50,
-                y: row * (enemyHeight + 10) + 50,
-                width: enemyWidth,
-                height: enemyHeight,
-                alive: true
-            });
-        }
-    }
+    enemies = createEnemiesForStage(stage);
 }
 
 function updateUI() {
@@ -812,6 +839,34 @@ function syncLanguageUI() {
 
 function getStageTheme() {
     return stageThemes[(stage - 1) % stageThemes.length];
+}
+
+function getStageFormation(stageNumber) {
+    return stageFormations[(stageNumber - 1) % stageFormations.length];
+}
+
+function createEnemiesForStage(stageNumber) {
+    const formation = getStageFormation(stageNumber);
+    const formationWidth = enemyCols * enemyWidth + (enemyCols - 1) * enemyGapX;
+    const startX = Math.max(20, Math.floor((canvas.width - formationWidth) / 2));
+    const startY = 50;
+    const spawnedEnemies = [];
+
+    formation.forEach((rowPattern, rowIndex) => {
+        Array.from(rowPattern).forEach((cell, colIndex) => {
+            if (cell !== '1') return;
+
+            spawnedEnemies.push({
+                x: startX + colIndex * (enemyWidth + enemyGapX),
+                y: startY + rowIndex * (enemyHeight + enemyGapY),
+                width: enemyWidth,
+                height: enemyHeight,
+                alive: true
+            });
+        });
+    });
+
+    return spawnedEnemies;
 }
 
 function applyStageTheme() {
@@ -1282,18 +1337,7 @@ function update() {
 
 function nextStage() {
     applyStageTheme();
-    enemies = [];
-    for (let row = 0; row < enemyRows; row++) {
-        for (let col = 0; col < enemyCols; col++) {
-            enemies.push({
-                x: col * (enemyWidth + 10) + 50,
-                y: row * (enemyHeight + 10) + 50,
-                width: enemyWidth,
-                height: enemyHeight,
-                alive: true
-            });
-        }
-    }
+    enemies = createEnemiesForStage(stage);
 }
 
 function gameLoop() {
