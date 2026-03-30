@@ -37,7 +37,18 @@ const marqueeSubtitleEl = document.querySelector('.marquee-subtitle');
 const creditsEl = document.getElementById('credits');
 const marqueeHighScoreEl = document.getElementById('marquee-high-score');
 
-let player = { x: canvas.width / 2 - 25, y: canvas.height - 50, width: 50, height: 30 };
+const PLAYER_SCALE = 1.1;
+const PLAYER_BASE_WIDTH = 50;
+const PLAYER_BASE_HEIGHT = 30;
+const PLAYER_WIDTH = Math.round(PLAYER_BASE_WIDTH * PLAYER_SCALE);
+const PLAYER_HEIGHT = Math.round(PLAYER_BASE_HEIGHT * PLAYER_SCALE);
+
+let player = {
+    x: canvas.width / 2 - PLAYER_WIDTH / 2,
+    y: canvas.height - 50,
+    width: PLAYER_WIDTH,
+    height: PLAYER_HEIGHT
+};
 let bullets = [];
 let enemies = [];
 let specialEnemies = [];
@@ -747,7 +758,7 @@ function changeStageSelection(direction) {
 }
 
 function init(startStage = stage) {
-    player.x = canvas.width / 2 - 25;
+    player.x = canvas.width / 2 - player.width / 2;
     bullets = [];
     enemies = [];
     specialEnemies = [];
@@ -1166,26 +1177,29 @@ function drawStageLabel(theme) {
 }
 
 function drawPixelShip(x, y, baseColor, accentColor) {
+    const scale = player.width / PLAYER_BASE_WIDTH;
+
     ctx.fillStyle = baseColor;
-    ctx.fillRect(x + 8, y + 16, 34, 10);
-    ctx.fillRect(x + 16, y + 8, 18, 8);
-    ctx.fillRect(x + 22, y, 6, 8);
+    ctx.fillRect(x + 8 * scale, y + 16 * scale, 34 * scale, 10 * scale);
+    ctx.fillRect(x + 16 * scale, y + 8 * scale, 18 * scale, 8 * scale);
+    ctx.fillRect(x + 22 * scale, y, 6 * scale, 8 * scale);
 
     ctx.fillStyle = accentColor;
-    ctx.fillRect(x + 22, y + 12, 6, 8);
-    ctx.fillRect(x + 4, y + 20, 8, 6);
-    ctx.fillRect(x + 38, y + 20, 8, 6);
+    ctx.fillRect(x + 22 * scale, y + 12 * scale, 6 * scale, 8 * scale);
+    ctx.fillRect(x + 4 * scale, y + 20 * scale, 8 * scale, 6 * scale);
+    ctx.fillRect(x + 38 * scale, y + 20 * scale, 8 * scale, 6 * scale);
 }
 
 function createPlayerExplosion() {
+    const scale = player.width / PLAYER_BASE_WIDTH;
     const particles = [];
     const blocks = [
-        { x: 8, y: 16, width: 34, height: 10, color: '#5eff9b' },
-        { x: 16, y: 8, width: 18, height: 8, color: '#5eff9b' },
-        { x: 22, y: 0, width: 6, height: 8, color: '#5eff9b' },
-        { x: 22, y: 12, width: 6, height: 8, color: '#d9ffe5' },
-        { x: 4, y: 20, width: 8, height: 6, color: '#d9ffe5' },
-        { x: 38, y: 20, width: 8, height: 6, color: '#d9ffe5' }
+        { x: 8 * scale, y: 16 * scale, width: 34 * scale, height: 10 * scale, color: '#5eff9b' },
+        { x: 16 * scale, y: 8 * scale, width: 18 * scale, height: 8 * scale, color: '#5eff9b' },
+        { x: 22 * scale, y: 0, width: 6 * scale, height: 8 * scale, color: '#5eff9b' },
+        { x: 22 * scale, y: 12 * scale, width: 6 * scale, height: 8 * scale, color: '#d9ffe5' },
+        { x: 4 * scale, y: 20 * scale, width: 8 * scale, height: 6 * scale, color: '#d9ffe5' },
+        { x: 38 * scale, y: 20 * scale, width: 8 * scale, height: 6 * scale, color: '#d9ffe5' }
     ];
 
     blocks.forEach(block => {
