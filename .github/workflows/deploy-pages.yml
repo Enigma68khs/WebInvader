@@ -1,0 +1,60 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare site artifact
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          mkdir -p .deploy
+          cp index.html styles.css game.js supabase-config.js .deploy/
+
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            cat > .deploy/supabase-config.js <<EOF
+          window.WEB_INVADER_SUPABASE_CONFIG = window.WEB_INVADER_SUPABASE_CONFIG || {
+              url: '${SUPABASE_URL}',
+              anonKey: '${SUPABASE_PUBLISHABLE_KEY}'
+          };
+          EOF
+          fi
+
+          cat > .deploy/supabase-config.local.js <<'EOF'
+          window.WEB_INVADER_SUPABASE_CONFIG = window.WEB_INVADER_SUPABASE_CONFIG || {};
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .deploy
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

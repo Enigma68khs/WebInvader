@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta
+        http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>웹 인베이더 게임</title>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -80,7 +84,7 @@
             </div>
         </section>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
     <script src="supabase-config.js"></script>
     <script src="supabase-config.local.js"></script>
     <script src="game.js"></script>

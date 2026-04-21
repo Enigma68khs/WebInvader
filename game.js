@@ -85,7 +85,9 @@ let specialEnemyIdCounter = 0;
 const languageOrder = ['ko', 'zh', 'en'];
 const HIGH_SCORE_STORAGE_KEY = 'webinvader.highscores.v1';
 const MAX_HIGH_SCORES = 5;
+const MAX_PLAYER_NAME_LENGTH = 12;
 const SUPABASE_TABLE_NAME = 'leaderboard_scores';
+const SUPABASE_SUBMIT_SCORE_FUNCTION = 'submit-score';
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 ctx.imageSmoothingEnabled = false;
@@ -151,6 +153,7 @@ const translations = {
         saveRecordPending: '기록을 저장하는 중입니다...',
         saveRecordFailed: '전역 기록 저장에 실패했습니다. 다시 시도해 주세요.',
         saveRecordFallback: '전역 저장에 실패해 로컬 기록으로 저장했습니다.',
+        invalidName: '이름은 문자, 숫자, 공백, 밑줄(_), 하이픈(-)만 12자까지 사용할 수 있습니다.',
         namePlaceholder: '이름',
         saveRecord: '저장',
         emptyRecord: '아직 기록이 없습니다.',
@@ -199,6 +202,7 @@ const translations = {
         saveRecordPending: '正在保存记录...',
         saveRecordFailed: '保存全球记录失败，请重试。',
         saveRecordFallback: '全球保存失败，已改为保存到本地记录。',
+        invalidName: '名字最多 12 个字符，只能包含文字、数字、空格、下划线和连字符。',
         namePlaceholder: '名字',
         saveRecord: '保存',
         emptyRecord: '暂无记录。',
@@ -247,6 +251,7 @@ const translations = {
         saveRecordPending: 'Saving your record...',
         saveRecordFailed: 'Failed to save the global record. Please try again.',
         saveRecordFallback: 'Global save failed, so the score was saved locally instead.',
+        invalidName: 'Names can be up to 12 characters and may only use letters, numbers, spaces, underscores, and hyphens.',
         namePlaceholder: 'Name',
         saveRecord: 'Save',
         emptyRecord: 'No records yet.',
@@ -282,13 +287,29 @@ function syncPendingScoreControls() {
     saveScoreBtn.disabled = !hasPendingHighScore;
 }
 
+function normalizePlayerName(value) {
+    if (typeof value !== 'string') return null;
+
+    const normalized = value
+        .normalize('NFKC')
+        .replace(/\s+/gu, ' ')
+        .trim();
+    const truncated = Array.from(normalized).slice(0, MAX_PLAYER_NAME_LENGTH).join('');
+
+    if (!truncated || !/^[\p{L}\p{N} _-]+$/u.test(truncated)) {
+        return null;
+    }
+
+    return truncated;
+}
+
 function sanitizeHighScoreEntries(entries) {
     if (!Array.isArray(entries)) return [];
 
     return entries
         .filter(entry => entry && typeof entry.name === 'string' && Number.isFinite(entry.score))
         .map(entry => ({
-            name: entry.name.trim().slice(0, 12) || 'AAA',
+            name: normalizePlayerName(entry.name) || 'AAA',
             score: Math.max(0, Math.floor(entry.score))
         }))
         .filter(entry => entry.score > 0)
@@ -381,15 +402,19 @@ async function refreshHighScores() {
 }
 
 async function submitHighScore(entry) {
+    const normalizedName = normalizePlayerName(entry.name) || 'AAA';
     const normalizedEntry = {
-        name: entry.name.trim().slice(0, 12) || 'AAA',
+        name: normalizedName,
         score: Math.max(0, Math.floor(entry.score))
     };
 
     if (supabaseClient) {
-        const { error } = await supabaseClient
-            .from(SUPABASE_TABLE_NAME)
-            .insert([{ player_name: normalizedEntry.name, score: normalizedEntry.score }]);
+        const { error } = await supabaseClient.functions.invoke(SUPABASE_SUBMIT_SCORE_FUNCTION, {
+            body: {
+                playerName: normalizedEntry.name,
+                score: normalizedEntry.score
+            }
+        });
 
         if (error) {
             highScores = mergeHighScoreEntry(normalizedEntry);
@@ -1868,8 +1893,15 @@ nameForm.addEventListener('submit', async (event) => {
     setNameModalStatus('saveRecordPending');
 
     const trimmedName = nameInput.value.trim();
+    const normalizedName = normalizePlayerName(trimmedName);
+    if (!normalizedName && trimmedName.length > 0) {
+        setNameModalStatus('invalidName');
+        nameSaveBtn.disabled = false;
+        return;
+    }
+
     const entry = {
-        name: trimmedName || 'AAA',
+        name: normalizedName || 'AAA',
         score: pendingHighScore.score
     };
 
