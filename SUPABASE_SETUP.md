@@ -53,6 +53,24 @@ SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_PROJECT_PUBLISHABLE_KEY
 - 이 시크릿이 비어 있으면 배포본은 전역 랭킹 없이 로컬 랭킹 모드로 동작합니다.
 - GitHub Pages를 쓴다면 `ALLOWED_ORIGINS`에는 보통 `https://<github-username>.github.io`를 넣습니다. 프로젝트 페이지라면 Origin은 여전히 같은 값이고, 경로(`/WebInvader`)는 넣지 않습니다.
 
+## Vercel 배포
+
+- Vercel은 기본 정적 배포에서는 루트 파일을 그대로 서비스하므로, 빈 [supabase-config.js](/Users/enigma68/MyPrograming/CodeStudy/WebInvader/supabase-config.js:1)를 그대로 배포하면 전역 랭킹이 로컬 모드로 떨어집니다.
+- 이 저장소에는 이를 막기 위해 [vercel.json](/Users/enigma68/MyPrograming/CodeStudy/WebInvader/vercel.json:1), [package.json](/Users/enigma68/MyPrograming/CodeStudy/WebInvader/package.json:1), [scripts/build-site.mjs](/Users/enigma68/MyPrograming/CodeStudy/WebInvader/scripts/build-site.mjs:1)가 포함되어 있습니다.
+- Vercel 프로젝트의 `Settings > Environment Variables`에 아래 값을 추가합니다.
+
+```text
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_PROJECT_PUBLISHABLE_KEY
+```
+
+- 새 배포부터는 `npm run build`가 `dist/supabase-config.js`를 생성하므로, 배포본에 실제 브라우저용 키가 들어갑니다.
+- `ALLOWED_ORIGINS`에는 실제 접속하는 Vercel Origin을 모두 넣어야 합니다. 끝의 `/`는 넣지 않습니다.
+
+```text
+https://web-invader.vercel.app,https://web-invader-cqtofi8fn-kimhsqq-7012s-projects.vercel.app
+```
+
 ## 공개 저장소에 올린 뒤 점검할 것
 
 - 이미 커밋된 값이 `sb_publishable` 또는 `anon` 키라면, 그것만으로 즉시 치명적인 비밀 유출은 아닐 가능성이 큽니다. 대신 RLS 정책과 공개 쓰기 권한을 먼저 점검해야 합니다.
