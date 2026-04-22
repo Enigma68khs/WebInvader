@@ -12,9 +12,15 @@ window.WEB_INVADER_SUPABASE_CONFIG = {
 };
 ```
 
-5. 게임을 배포하거나 브라우저에서 다시 열면 전역 Top 5가 표시됩니다.
+5. 게임을 배포하거나 브라우저에서 다시 열면 전역 Top 5와 방문자 수가 표시됩니다.
 
-설정이 비어 있거나 Supabase 연결에 실패하면 게임은 기존처럼 로컬 캐시 랭킹으로 동작합니다.
+설정이 비어 있거나 Supabase 연결에 실패하면 게임은 기존처럼 로컬 캐시 랭킹으로 동작하고, 방문자 수는 마지막으로 캐시된 값 또는 `--`로 표시됩니다.
+
+## 방문자 수 집계 방식
+
+- 상단 점수 박스 오른쪽에 `오늘`과 `전체` 방문자 수가 표시됩니다.
+- 브라우저별로 UUID를 하나 저장하고, 같은 브라우저가 같은 UTC 날짜에 다시 열려도 중복 집계되지 않도록 `site_visits` 테이블의 `(visit_date, visitor_id)` 기본키로 막습니다.
+- 따라서 현재 숫자는 "하루에 한 번만 카운트되는 브라우저 기준 방문자 수"에 가깝습니다.
 
 ## Edge Function 배포
 
@@ -34,6 +40,7 @@ supabase functions deploy submit-score
 - `sb_publishable` 또는 `anon` 키는 프런트엔드에서 사용하도록 설계된 키라서, 브라우저에 전달되는 순간 사용자에게 보입니다. 저장소에서만 숨겨도 런타임에서는 숨길 수 없습니다.
 - 절대로 `service_role` 또는 `sb_secret` 키를 브라우저 코드, 공개 저장소, 정적 파일에 넣으면 안 됩니다. 이 키들은 RLS를 우회할 수 있습니다.
 - 현재 구조는 브라우저가 Edge Function을 호출하고, 함수가 서버 측 `service_role` 키로 점수를 저장하는 방식입니다.
+- 방문자 집계는 정적 사이트에서도 바로 동작하도록 `site_visits` 테이블에 브라우저가 직접 `insert`합니다. 중복은 기본키가 막지만, 악의적인 임의 요청까지 완전히 방지하지는 않습니다.
 - 현재 함수는 허용된 Origin만 통과시키고, 과도한 요청을 줄이기 위해 인스턴스 단위의 간단한 rate limiting을 적용합니다.
 - 이 변경으로 DB 직접 쓰기는 닫았지만, 게임 점수 자체는 여전히 클라이언트에서 만들어지므로 점수 위조를 완전히 막을 수는 없습니다.
 - 실제 서비스로 운영할 경우 현재의 인메모리 제한 외에 Turnstile/CAPTCHA, 영속형 rate limiting, 더 강한 점수 검증 로직을 추가하는 것이 좋습니다.
@@ -75,4 +82,4 @@ https://web-invader.vercel.app,https://web-invader-cqtofi8fn-kimhsqq-7012s-proje
 
 - 이미 커밋된 값이 `sb_publishable` 또는 `anon` 키라면, 그것만으로 즉시 치명적인 비밀 유출은 아닐 가능성이 큽니다. 대신 RLS 정책과 공개 쓰기 권한을 먼저 점검해야 합니다.
 - 이미 커밋된 값이 `service_role` 또는 `sb_secret` 키였다면 즉시 키를 폐기 또는 교체하고, 해당 키가 노출된 모든 커밋과 배포 산출물도 함께 정리해야 합니다.
-- 예전 SQL을 이미 적용한 상태라면, 업데이트된 [supabase-schema.sql](/Users/enigma68/MyPrograming/CodeStudy/WebInvader/supabase-schema.sql)을 다시 실행해 `anon insert` 정책을 제거해야 합니다.
+- 예전 SQL을 이미 적용한 상태라면, 업데이트된 [supabase-schema.sql](/Users/enigma68/MyPrograming/CodeStudy/WebInvader/supabase-schema.sql)을 다시 실행해 최신 정책과 `site_visits` 테이블을 함께 반영해야 합니다.

@@ -42,3 +42,29 @@ using (true);
 drop policy if exists "leaderboard_scores_insert_all" on public.leaderboard_scores;
 -- Writes now go through the submit-score Edge Function using the service role key.
 -- Keep direct inserts closed for anon/authenticated browser clients.
+
+create table if not exists public.site_visits (
+    visit_date date not null,
+    visitor_id uuid not null,
+    created_at timestamptz not null default now(),
+    primary key (visit_date, visitor_id)
+);
+
+create index if not exists site_visits_created_at_idx
+on public.site_visits (created_at desc);
+
+alter table public.site_visits enable row level security;
+
+drop policy if exists "site_visits_select_all" on public.site_visits;
+create policy "site_visits_select_all"
+on public.site_visits
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "site_visits_insert_all" on public.site_visits;
+create policy "site_visits_insert_all"
+on public.site_visits
+for insert
+to anon, authenticated
+with check (true);

@@ -36,6 +36,11 @@ const marqueeTitleEl = document.querySelector('.marquee-title');
 const marqueeSubtitleEl = document.querySelector('.marquee-subtitle');
 const creditsEl = document.getElementById('credits');
 const marqueeHighScoreEl = document.getElementById('marquee-high-score');
+const visitStatsLabelEl = document.getElementById('visit-stats-label');
+const visitTodayLabelEl = document.getElementById('visit-today-label');
+const visitTodayValueEl = document.getElementById('visit-today-value');
+const visitTotalLabelEl = document.getElementById('visit-total-label');
+const visitTotalValueEl = document.getElementById('visit-total-value');
 
 const PLAYER_SCALE = 1.1;
 const PLAYER_BASE_WIDTH = 50;
@@ -66,7 +71,7 @@ let rapidFireEnabled = false;
 let bulletReady = true;
 let musicTimer = null;
 let musicStep = 0;
-let currentLanguage = 'ko';
+let currentLanguage = 'en';
 let helpOpen = false;
 let nameModalOpen = false;
 let moveTouchId = null;
@@ -85,11 +90,15 @@ let specialEnemyIdCounter = 0;
 let scorePopups = [];
 const languageOrder = ['ko', 'zh', 'en'];
 const HIGH_SCORE_STORAGE_KEY = 'webinvader.highscores.v1';
+const VISIT_STATS_STORAGE_KEY = 'webinvader.visit-stats.v1';
+const VISITOR_ID_STORAGE_KEY = 'webinvader.visitor-id.v1';
 const MAX_HIGH_SCORES = 5;
 const MAX_PLAYER_NAME_LENGTH = 12;
 const SUPABASE_TABLE_NAME = 'leaderboard_scores';
 const SUPABASE_SUBMIT_SCORE_FUNCTION = 'submit-score';
+const VISIT_COUNTER_TABLE_NAME = 'site_visits';
 const SCORE_POPUP_LIFETIME = 72;
+let visitStats = loadVisitStats();
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 ctx.imageSmoothingEnabled = false;
@@ -339,6 +348,79 @@ function saveHighScores() {
     }
 }
 
+function loadVisitStats() {
+    try {
+        const raw = window.localStorage.getItem(VISIT_STATS_STORAGE_KEY);
+        if (!raw) return { today: null, total: null };
+
+        const parsed = JSON.parse(raw);
+        return {
+            today: Number.isFinite(parsed?.today) ? parsed.today : null,
+            total: Number.isFinite(parsed?.total) ? parsed.total : null
+        };
+    } catch {
+        return { today: null, total: null };
+    }
+}
+
+function saveVisitStats() {
+    try {
+        window.localStorage.setItem(VISIT_STATS_STORAGE_KEY, JSON.stringify(visitStats));
+    } catch {
+        // Ignore storage failures and keep runtime state.
+    }
+}
+
+function generateVisitorId() {
+    if (typeof window.crypto?.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+    }
+
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+        const random = Math.floor(Math.random() * 16);
+        const value = char === 'x' ? random : (random & 0x3) | 0x8;
+        return value.toString(16);
+    });
+}
+
+function getVisitorId() {
+    try {
+        const existingId = window.localStorage.getItem(VISITOR_ID_STORAGE_KEY);
+        if (existingId) return existingId;
+
+        const newId = generateVisitorId();
+
+        window.localStorage.setItem(VISITOR_ID_STORAGE_KEY, newId);
+        return newId;
+    } catch {
+        return generateVisitorId();
+    }
+}
+
+function getVisitDateString(date = new Date()) {
+    return date.toISOString().slice(0, 10);
+}
+
+function formatCompactNumber(value) {
+    if (!Number.isFinite(value)) return '--';
+
+    const locale = currentLanguage === 'ko'
+        ? 'ko-KR'
+        : currentLanguage === 'zh'
+            ? 'zh-CN'
+            : 'en-US';
+
+    return new Intl.NumberFormat(locale).format(value);
+}
+
+function renderVisitStats() {
+    visitStatsLabelEl.textContent = 'Visitors';
+    visitTodayLabelEl.textContent = 'Today';
+    visitTotalLabelEl.textContent = 'Total';
+    visitTodayValueEl.textContent = formatCompactNumber(visitStats.today);
+    visitTotalValueEl.textContent = formatCompactNumber(visitStats.total);
+}
+
 function createSupabaseClient() {
     const config = window.WEB_INVADER_SUPABASE_CONFIG;
     const url = typeof config?.url === 'string' ? config.url.trim() : '';
@@ -452,6 +534,49 @@ async function refreshHighScores() {
     leaderboardSource = 'global';
     leaderboardLoading = false;
     renderLeaderboard();
+}
+
+async function refreshVisitStats() {
+    renderVisitStats();
+
+    if (!supabaseClient) {
+        return;
+    }
+
+    const visitorId = getVisitorId();
+    const visitDate = getVisitDateString();
+
+    const { error: insertError } = await supabaseClient
+        .from(VISIT_COUNTER_TABLE_NAME)
+        .insert({
+            visit_date: visitDate,
+            visitor_id: visitorId
+        });
+
+    if (insertError && insertError.code !== '23505') {
+        return;
+    }
+
+    const [todayResult, totalResult] = await Promise.all([
+        supabaseClient
+            .from(VISIT_COUNTER_TABLE_NAME)
+            .select('visitor_id', { count: 'exact', head: true })
+            .eq('visit_date', visitDate),
+        supabaseClient
+            .from(VISIT_COUNTER_TABLE_NAME)
+            .select('visitor_id', { count: 'exact', head: true })
+    ]);
+
+    if (todayResult.error || totalResult.error) {
+        return;
+    }
+
+    visitStats = {
+        today: todayResult.count ?? null,
+        total: totalResult.count ?? null
+    };
+    saveVisitStats();
+    renderVisitStats();
 }
 
 async function submitHighScore(entry) {
@@ -1086,6 +1211,7 @@ function syncLanguageUI() {
     setNameModalStatus(nameModalStatusKey);
     syncHelpPanelVisibility();
     syncNameModalVisibility();
+    renderVisitStats();
     renderLeaderboard();
     syncStageControls();
     syncPendingScoreControls();
@@ -2135,3 +2261,4 @@ updateUI();
 applyStageTheme();
 gameLoop();
 void refreshHighScores();
+void refreshVisitStats();
