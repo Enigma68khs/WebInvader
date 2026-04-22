@@ -36,7 +36,6 @@ const marqueeTitleEl = document.querySelector('.marquee-title');
 const marqueeSubtitleEl = document.querySelector('.marquee-subtitle');
 const creditsEl = document.getElementById('credits');
 const marqueeHighScoreEl = document.getElementById('marquee-high-score');
-const visitStatsLabelEl = document.getElementById('visit-stats-label');
 const visitTodayLabelEl = document.getElementById('visit-today-label');
 const visitTodayValueEl = document.getElementById('visit-today-value');
 const visitTotalLabelEl = document.getElementById('visit-total-label');
@@ -414,7 +413,6 @@ function formatCompactNumber(value) {
 }
 
 function renderVisitStats() {
-    visitStatsLabelEl.textContent = 'Visitors';
     visitTodayLabelEl.textContent = 'Today';
     visitTotalLabelEl.textContent = 'Total';
     visitTodayValueEl.textContent = formatCompactNumber(visitStats.today);
