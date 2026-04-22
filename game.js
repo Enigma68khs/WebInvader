@@ -8,7 +8,6 @@ const startBtn = document.getElementById('start-btn');
 const restartBtn = document.getElementById('restart-btn');
 const pauseBtn = document.getElementById('pause-btn');
 const musicBtn = document.getElementById('music-btn');
-const saveScoreBtn = document.getElementById('save-score-btn');
 const rapidFireCheckbox = document.getElementById('rapid-fire-checkbox');
 const rapidFireLabelEl = document.getElementById('rapid-fire-label');
 const helpBtn = document.getElementById('help-btn');
@@ -19,7 +18,13 @@ const nameModalTitleEl = document.getElementById('name-modal-title');
 const nameModalTextEl = document.getElementById('name-modal-text');
 const nameForm = document.getElementById('name-form');
 const nameInput = document.getElementById('name-input');
+const nameCancelBtn = document.getElementById('name-cancel-btn');
 const nameSaveBtn = document.getElementById('name-save-btn');
+const leaderboardModal = document.getElementById('leaderboard-modal');
+const leaderboardCloseBtn = document.getElementById('leaderboard-close-btn');
+const leaderboardModalTitleEl = document.getElementById('leaderboard-modal-title');
+const leaderboardModalTextEl = document.getElementById('leaderboard-modal-text');
+const leaderboardModalListEl = document.getElementById('leaderboard-modal-list');
 const helpModal = document.getElementById('help-modal');
 const helpPanel = document.getElementById('help-panel');
 const helpCloseBtn = document.getElementById('help-close-btn');
@@ -73,11 +78,14 @@ let musicStep = 0;
 let currentLanguage = 'en';
 let helpOpen = false;
 let nameModalOpen = false;
+let leaderboardModalOpen = false;
 let moveTouchId = null;
 let fireTouchIds = new Set();
 let playerExplosion = null;
-let pendingHighScore = null;
+let pendingScoreSubmission = null;
+let leaderboardModalResult = null;
 let highScores = [];
+let scoreHistory = [];
 let supabaseClient = null;
 let frameCount = 0;
 let leaderboardLoading = false;
@@ -89,6 +97,7 @@ let specialEnemyIdCounter = 0;
 let scorePopups = [];
 const languageOrder = ['ko', 'zh', 'en'];
 const HIGH_SCORE_STORAGE_KEY = 'webinvader.highscores.v1';
+const SCORE_HISTORY_STORAGE_KEY = 'webinvader.score-history.v1';
 const VISIT_STATS_STORAGE_KEY = 'webinvader.visit-stats.v1';
 const VISITOR_ID_STORAGE_KEY = 'webinvader.visitor-id.v1';
 const MAX_HIGH_SCORES = 5;
@@ -148,7 +157,6 @@ const translations = {
         restart: '다시하기',
         musicOn: '음악켜기',
         musicOff: '음악끄기',
-        saveScore: '기록 저장',
         topScoreLabel: '최고점수',
         globalBoard: '전역 TOP 5',
         localBoard: '로컬 TOP 5',
@@ -158,14 +166,18 @@ const translations = {
         gameOver: '게임 오버',
         victory: '승리!',
         restartHint: '다시하기를 눌러주세요',
-        newRecordTitle: '최고기록 등록',
-        newRecordPrompt: '최고기록을 세웠습니다. 이름을 입력해 주세요.',
+        newRecordTitle: '점수 기록 저장',
+        newRecordPrompt: '이름을 입력하면 점수를 저장하고 현재 순위를 보여줍니다. 원하지 않으면 취소하세요.',
         saveRecordPending: '기록을 저장하는 중입니다...',
         saveRecordFailed: '전역 기록 저장에 실패했습니다. 다시 시도해 주세요.',
         saveRecordFallback: '전역 저장에 실패해 로컬 기록으로 저장했습니다.',
+        emptyName: '이름을 입력하거나 취소를 눌러 주세요.',
         invalidName: '이름은 문자, 숫자, 공백, 밑줄(_), 하이픈(-)만 12자까지 사용할 수 있습니다.',
         namePlaceholder: '이름',
         saveRecord: '저장',
+        cancelAction: '취소',
+        leaderboardTitle: '점수판',
+        leaderboardRankUnavailable: '현재 순위를 계산하지 못했습니다.',
         emptyRecord: '아직 기록이 없습니다.',
         stageCanvas: '스테이지',
         languageButton: '한국어',
@@ -197,7 +209,6 @@ const translations = {
         restart: '重新开始',
         musicOn: '开启音乐',
         musicOff: '关闭音乐',
-        saveScore: '保存记录',
         topScoreLabel: '最高分',
         globalBoard: '全球 TOP 5',
         localBoard: '本地 TOP 5',
@@ -207,14 +218,18 @@ const translations = {
         gameOver: '游戏结束',
         victory: '胜利！',
         restartHint: '请点击重新开始',
-        newRecordTitle: '登记最高纪录',
-        newRecordPrompt: '你打入了排行榜。请输入名字。',
+        newRecordTitle: '保存分数',
+        newRecordPrompt: '输入名字后会保存分数并显示当前排名。不想输入的话可以取消。',
         saveRecordPending: '正在保存记录...',
         saveRecordFailed: '保存全球记录失败，请重试。',
         saveRecordFallback: '全球保存失败，已改为保存到本地记录。',
+        emptyName: '请输入名字，或者直接取消。',
         invalidName: '名字最多 12 个字符，只能包含文字、数字、空格、下划线和连字符。',
         namePlaceholder: '名字',
         saveRecord: '保存',
+        cancelAction: '取消',
+        leaderboardTitle: '排行榜',
+        leaderboardRankUnavailable: '暂时无法计算当前排名。',
         emptyRecord: '暂无记录。',
         stageCanvas: '关卡',
         languageButton: '中文',
@@ -246,7 +261,6 @@ const translations = {
         restart: 'Restart',
         musicOn: 'Music On',
         musicOff: 'Music Off',
-        saveScore: 'Save Score',
         topScoreLabel: 'Top Score',
         globalBoard: 'Global Top 5',
         localBoard: 'Local Top 5',
@@ -256,14 +270,18 @@ const translations = {
         gameOver: 'Game Over',
         victory: 'Victory!',
         restartHint: 'Press Restart to play again',
-        newRecordTitle: 'New High Score',
-        newRecordPrompt: 'You made the leaderboard. Enter your name.',
+        newRecordTitle: 'Save Your Score',
+        newRecordPrompt: 'Enter your name to save your score and see your rank. You can also cancel.',
         saveRecordPending: 'Saving your record...',
         saveRecordFailed: 'Failed to save the global record. Please try again.',
         saveRecordFallback: 'Global save failed, so the score was saved locally instead.',
+        emptyName: 'Enter a name or cancel.',
         invalidName: 'Names can be up to 12 characters and may only use letters, numbers, spaces, underscores, and hyphens.',
         namePlaceholder: 'Name',
         saveRecord: 'Save',
+        cancelAction: 'Cancel',
+        leaderboardTitle: 'Leaderboard',
+        leaderboardRankUnavailable: 'Unable to calculate your current rank.',
         emptyRecord: 'No records yet.',
         stageCanvas: 'Stage',
         languageButton: 'English',
@@ -291,10 +309,9 @@ function syncNameModalVisibility() {
     nameModal.setAttribute('aria-hidden', String(!nameModalOpen));
 }
 
-function syncPendingScoreControls() {
-    const hasPendingHighScore = Boolean(pendingHighScore);
-    saveScoreBtn.hidden = !hasPendingHighScore;
-    saveScoreBtn.disabled = !hasPendingHighScore;
+function syncLeaderboardModalVisibility() {
+    leaderboardModal.hidden = !leaderboardModalOpen;
+    leaderboardModal.setAttribute('aria-hidden', String(!leaderboardModalOpen));
 }
 
 function normalizePlayerName(value) {
@@ -313,7 +330,7 @@ function normalizePlayerName(value) {
     return truncated;
 }
 
-function sanitizeHighScoreEntries(entries) {
+function sanitizeScoreEntries(entries, limit = Number.POSITIVE_INFINITY) {
     if (!Array.isArray(entries)) return [];
 
     return entries
@@ -324,7 +341,15 @@ function sanitizeHighScoreEntries(entries) {
         }))
         .filter(entry => entry.score > 0)
         .sort((a, b) => b.score - a.score)
-        .slice(0, MAX_HIGH_SCORES);
+        .slice(0, Number.isFinite(limit) ? limit : undefined);
+}
+
+function sanitizeHighScoreEntries(entries) {
+    return sanitizeScoreEntries(entries, MAX_HIGH_SCORES);
+}
+
+function sanitizeScoreHistoryEntries(entries) {
+    return sanitizeScoreEntries(entries);
 }
 
 function loadHighScores() {
@@ -342,6 +367,26 @@ function loadHighScores() {
 function saveHighScores() {
     try {
         window.localStorage.setItem(HIGH_SCORE_STORAGE_KEY, JSON.stringify(highScores));
+    } catch {
+        // Ignore storage failures and keep runtime state.
+    }
+}
+
+function loadScoreHistory() {
+    try {
+        const raw = window.localStorage.getItem(SCORE_HISTORY_STORAGE_KEY);
+        if (!raw) return [];
+
+        const parsed = JSON.parse(raw);
+        return sanitizeScoreHistoryEntries(parsed);
+    } catch {
+        return [];
+    }
+}
+
+function saveScoreHistory() {
+    try {
+        window.localStorage.setItem(SCORE_HISTORY_STORAGE_KEY, JSON.stringify(scoreHistory));
     } catch {
         // Ignore storage failures and keep runtime state.
     }
@@ -440,6 +485,37 @@ function mergeHighScoreEntry(entry) {
     return sanitizeHighScoreEntries([...highScores, entry]);
 }
 
+function mergeScoreHistoryEntry(entry) {
+    return sanitizeScoreHistoryEntries([...scoreHistory, entry]);
+}
+
+function getScoreRank(entries, scoreValue) {
+    if (!Number.isFinite(scoreValue) || scoreValue <= 0) return null;
+    return entries.filter(entry => entry.score > scoreValue).length + 1;
+}
+
+function getBoardLabel(source = leaderboardSource) {
+    const text = translations[currentLanguage];
+    return source === 'global' ? text.globalBoard : text.localBoard;
+}
+
+function formatRankMessage(rank, source = leaderboardSource) {
+    if (!Number.isFinite(rank) || rank < 1) {
+        return getText('leaderboardRankUnavailable');
+    }
+
+    const boardLabel = getBoardLabel(source);
+
+    switch (currentLanguage) {
+    case 'ko':
+        return `${boardLabel} 기준 현재 ${rank}등입니다.`;
+    case 'zh':
+        return `当前在${boardLabel}中排名第 ${rank} 名。`;
+    default:
+        return `You ranked #${rank} on the ${boardLabel}.`;
+    }
+}
+
 function getSpecialEnemyDefeatScore(stageNumber) {
     const difficultyBonus = 30 + stageNumber * 8;
     const durabilityBonus = getSpecialEnemyMaxHealth(stageNumber) * 4;
@@ -496,10 +572,80 @@ function setNameModalStatus(statusKey = null) {
     nameModalTextEl.textContent = getText(statusKey || 'newRecordPrompt');
 }
 
+function renderLeaderboardModal() {
+    leaderboardModalTitleEl.textContent = getText('leaderboardTitle');
+    leaderboardModalListEl.replaceChildren();
+
+    if (!leaderboardModalResult) {
+        leaderboardModalTextEl.textContent = getText('emptyRecord');
+        return;
+    }
+
+    leaderboardModalTextEl.textContent = formatRankMessage(
+        leaderboardModalResult.rank,
+        leaderboardModalResult.source
+    );
+
+    const displayEntries = Array.isArray(leaderboardModalResult.entries)
+        ? leaderboardModalResult.entries.slice(0, MAX_HIGH_SCORES)
+        : [];
+    const shouldAppendCurrentEntry = Number.isFinite(leaderboardModalResult.rank)
+        && leaderboardModalResult.rank > MAX_HIGH_SCORES;
+
+    const rows = displayEntries.map((entry, index) => ({
+        rank: index + 1,
+        entry,
+        isCurrent: Number.isFinite(leaderboardModalResult.rank) && leaderboardModalResult.rank === index + 1
+            && entry.name === leaderboardModalResult.entry.name
+            && entry.score === leaderboardModalResult.entry.score
+    }));
+
+    if (shouldAppendCurrentEntry) {
+        rows.push({
+            rank: leaderboardModalResult.rank,
+            entry: leaderboardModalResult.entry,
+            isCurrent: true
+        });
+    }
+
+    rows.forEach(({ rank, entry, isCurrent }) => {
+        const item = document.createElement('li');
+        item.className = `leaderboard-row${isCurrent ? ' is-current' : ''}`;
+
+        const rankEl = document.createElement('span');
+        rankEl.className = 'leaderboard-rank';
+        rankEl.textContent = `${rank}.`;
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'leaderboard-name';
+        nameEl.textContent = entry.name;
+
+        const scoreValueEl = document.createElement('span');
+        scoreValueEl.className = 'leaderboard-score';
+        scoreValueEl.textContent = String(entry.score);
+
+        item.append(rankEl, nameEl, scoreValueEl);
+        leaderboardModalListEl.append(item);
+    });
+}
+
+function openLeaderboardModal(result) {
+    leaderboardModalResult = result;
+    leaderboardModalOpen = true;
+    renderLeaderboardModal();
+    syncLeaderboardModalVisibility();
+}
+
+function closeLeaderboardModal() {
+    leaderboardModalOpen = false;
+    syncLeaderboardModalVisibility();
+}
+
 async function refreshHighScores() {
     if (!supabaseClient) {
         leaderboardSource = 'local';
         leaderboardLoading = false;
+        highScores = sanitizeHighScoreEntries(scoreHistory.length ? scoreHistory : loadHighScores());
         renderLeaderboard();
         return;
     }
@@ -517,7 +663,7 @@ async function refreshHighScores() {
     if (error) {
         leaderboardSource = 'local';
         leaderboardLoading = false;
-        highScores = loadHighScores();
+        highScores = sanitizeHighScoreEntries(scoreHistory.length ? scoreHistory : loadHighScores());
         renderLeaderboard();
         return;
     }
@@ -532,6 +678,20 @@ async function refreshHighScores() {
     leaderboardSource = 'global';
     leaderboardLoading = false;
     renderLeaderboard();
+}
+
+async function fetchRemoteRank(scoreValue) {
+    const { count, error } = await supabaseClient
+        .from(SUPABASE_TABLE_NAME)
+        .select('score', { count: 'exact', head: true })
+        .gt('score', scoreValue);
+
+    if (error) {
+        const visibleIndex = highScores.findIndex(entry => entry.score === scoreValue);
+        return visibleIndex >= 0 ? visibleIndex + 1 : null;
+    }
+
+    return (count ?? 0) + 1;
 }
 
 async function refreshVisitStats() {
@@ -593,29 +753,47 @@ async function submitHighScore(entry) {
         });
 
         if (error) {
+            scoreHistory = mergeScoreHistoryEntry(normalizedEntry);
             highScores = mergeHighScoreEntry(normalizedEntry);
+            saveScoreHistory();
             saveHighScores();
             leaderboardSource = 'local';
             leaderboardLoading = false;
             renderLeaderboard();
-            return { storedRemotely: false };
+            return {
+                storedRemotely: false,
+                rank: getScoreRank(scoreHistory, normalizedEntry.score),
+                entry: normalizedEntry,
+                entries: highScores,
+                source: 'local'
+            };
         }
 
+        scoreHistory = mergeScoreHistoryEntry(normalizedEntry);
+        saveScoreHistory();
         await refreshHighScores();
-        return { storedRemotely: true };
+        return {
+            storedRemotely: true,
+            rank: await fetchRemoteRank(normalizedEntry.score),
+            entry: normalizedEntry,
+            entries: highScores,
+            source: 'global'
+        };
     }
 
+    scoreHistory = mergeScoreHistoryEntry(normalizedEntry);
     highScores = mergeHighScoreEntry(normalizedEntry);
+    saveScoreHistory();
     saveHighScores();
     leaderboardSource = 'local';
     renderLeaderboard();
-    return { storedRemotely: false };
-}
-
-function isHighScore(scoreValue) {
-    if (scoreValue <= 0) return false;
-    if (highScores.length < MAX_HIGH_SCORES) return true;
-    return scoreValue > highScores[highScores.length - 1].score;
+    return {
+        storedRemotely: false,
+        rank: getScoreRank(scoreHistory, normalizedEntry.score),
+        entry: normalizedEntry,
+        entries: highScores,
+        source: 'local'
+    };
 }
 
 function renderLeaderboard() {
@@ -637,20 +815,11 @@ function renderLeaderboard() {
     marqueeHighScoreEl.textContent = `${boardLabel}  ${entries.join('  |  ')}`;
 }
 
-function maybePromptHighScore() {
-    if (!gameOver || pendingHighScore || !isHighScore(score)) return;
+function maybePromptScoreSubmission() {
+    if (!gameOver || pendingScoreSubmission) return;
 
-    pendingHighScore = { score };
+    pendingScoreSubmission = { score };
     nameInput.value = '';
-    setNameModalStatus();
-    nameModalOpen = true;
-    syncNameModalVisibility();
-    syncPendingScoreControls();
-}
-
-function openPendingHighScoreModal() {
-    if (!pendingHighScore) return;
-
     setNameModalStatus();
     nameModalOpen = true;
     syncNameModalVisibility();
@@ -659,6 +828,14 @@ function openPendingHighScoreModal() {
 function closeNameModal() {
     nameModalOpen = false;
     syncNameModalVisibility();
+}
+
+function cancelScoreSubmission() {
+    pendingScoreSubmission = null;
+    nameInput.value = '';
+    nameSaveBtn.disabled = false;
+    setNameModalStatus();
+    closeNameModal();
 }
 
 function playSound(frequency, duration, type = 'sine') {
@@ -1074,14 +1251,15 @@ function init(startStage = stage) {
     moveTouchId = null;
     fireTouchIds = new Set();
     playerExplosion = null;
-    pendingHighScore = null;
+    pendingScoreSubmission = null;
+    leaderboardModalResult = null;
     frameCount = 0;
     remainingSpecialSpawns = getSpecialSpawnCount(stage);
     specialSpawnCooldown = 150;
     specialEnemyIdCounter = 0;
     scorePopups = [];
     closeNameModal();
-    syncPendingScoreControls();
+    closeLeaderboardModal();
     syncLanguageUI();
     updateUI();
     applyStageTheme();
@@ -1187,7 +1365,6 @@ function syncLanguageUI() {
     pauseBtn.textContent = paused ? text.resume : text.pause;
     restartBtn.textContent = text.restart;
     musicBtn.textContent = musicOn ? text.musicOff : text.musicOn;
-    saveScoreBtn.textContent = text.saveScore;
     rapidFireLabelEl.textContent = text.rapidFire;
     rapidFireCheckbox.checked = rapidFireEnabled;
     helpBtn.textContent = text.help;
@@ -1195,10 +1372,13 @@ function syncLanguageUI() {
     nameModalTitleEl.textContent = text.newRecordTitle;
     nameModalTextEl.textContent = text.newRecordPrompt;
     nameInput.placeholder = text.namePlaceholder;
+    nameCancelBtn.textContent = text.cancelAction;
     nameSaveBtn.textContent = text.saveRecord;
+    leaderboardModalTitleEl.textContent = text.leaderboardTitle;
     helpTitleEl.textContent = text.helpTitle;
     helpCloseBtn.setAttribute('aria-label', text.closeLabel);
     nameCloseBtn.setAttribute('aria-label', text.closeLabel);
+    leaderboardCloseBtn.setAttribute('aria-label', text.closeLabel);
     helpIntroEl.textContent = text.helpIntro;
     helpMobileTitleEl.textContent = text.helpMobileTitle;
     helpMobileBodyEl.textContent = text.helpMobileBody;
@@ -1209,10 +1389,11 @@ function syncLanguageUI() {
     setNameModalStatus(nameModalStatusKey);
     syncHelpPanelVisibility();
     syncNameModalVisibility();
+    renderLeaderboardModal();
+    syncLeaderboardModalVisibility();
     renderVisitStats();
     renderLeaderboard();
     syncStageControls();
-    syncPendingScoreControls();
 }
 
 function getStageTheme() {
@@ -1580,7 +1761,7 @@ function triggerPlayerDefeat() {
     playerExplosion = createPlayerExplosion();
     ensureAudioReady();
     playPlayerExplosionSound();
-    maybePromptHighScore();
+    maybePromptScoreSubmission();
 }
 
 function updatePlayerExplosion() {
@@ -2073,7 +2254,7 @@ function update() {
             gameOverReason = 'victory';
             syncStageControls();
             stopBackgroundMusic();
-            maybePromptHighScore();
+            maybePromptScoreSubmission();
         }
     }
 }
@@ -2162,29 +2343,35 @@ rapidFireCheckbox.addEventListener('change', () => {
 
 nameForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!pendingHighScore) return;
+    if (!pendingScoreSubmission) return;
 
     nameSaveBtn.disabled = true;
     setNameModalStatus('saveRecordPending');
 
     const trimmedName = nameInput.value.trim();
+    if (!trimmedName) {
+        setNameModalStatus('emptyName');
+        nameSaveBtn.disabled = false;
+        return;
+    }
+
     const normalizedName = normalizePlayerName(trimmedName);
-    if (!normalizedName && trimmedName.length > 0) {
+    if (!normalizedName) {
         setNameModalStatus('invalidName');
         nameSaveBtn.disabled = false;
         return;
     }
 
     const entry = {
-        name: normalizedName || 'AAA',
-        score: pendingHighScore.score
+        name: normalizedName,
+        score: pendingScoreSubmission.score
     };
 
     try {
         const result = await submitHighScore(entry);
-        pendingHighScore = null;
+        pendingScoreSubmission = null;
         closeNameModal();
-        syncPendingScoreControls();
+        openLeaderboardModal(result);
         if (!result.storedRemotely) {
             window.alert(getText('saveRecordFallback'));
         }
@@ -2195,21 +2382,26 @@ nameForm.addEventListener('submit', async (event) => {
     }
 });
 
-nameCloseBtn.addEventListener('click', closeNameModal);
+nameCancelBtn.addEventListener('click', cancelScoreSubmission);
+nameCloseBtn.addEventListener('click', cancelScoreSubmission);
 
 nameModal.addEventListener('click', (event) => {
     if (event.target === nameModal) {
-        closeNameModal();
+        cancelScoreSubmission();
+    }
+});
+
+leaderboardCloseBtn.addEventListener('click', closeLeaderboardModal);
+
+leaderboardModal.addEventListener('click', (event) => {
+    if (event.target === leaderboardModal) {
+        closeLeaderboardModal();
     }
 });
 
 helpBtn.addEventListener('click', () => {
     helpOpen = !helpOpen;
     syncHelpPanelVisibility();
-});
-
-saveScoreBtn.addEventListener('click', () => {
-    openPendingHighScoreModal();
 });
 
 helpCloseBtn.addEventListener('click', () => {
@@ -2235,7 +2427,12 @@ document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
 
     if (nameModalOpen) {
-        closeNameModal();
+        cancelScoreSubmission();
+        return;
+    }
+
+    if (leaderboardModalOpen) {
+        closeLeaderboardModal();
         return;
     }
 
@@ -2251,7 +2448,11 @@ canvas.addEventListener('touchend', handleTouchEnd);
 canvas.addEventListener('touchcancel', handleTouchEnd);
 
 supabaseClient = createSupabaseClient();
-highScores = loadHighScores();
+scoreHistory = loadScoreHistory();
+if (!scoreHistory.length) {
+    scoreHistory = sanitizeScoreHistoryEntries(loadHighScores());
+}
+highScores = sanitizeHighScoreEntries(scoreHistory.length ? scoreHistory : loadHighScores());
 leaderboardSource = supabaseClient ? 'global' : 'local';
 leaderboardLoading = Boolean(supabaseClient);
 syncLanguageUI();

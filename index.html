@@ -56,7 +56,6 @@
             <button id="pause-btn">Pause</button>
             <button id="restart-btn">Restart</button>
             <button id="music-btn">Music On</button>
-            <button id="save-score-btn" type="button" hidden>Save Score</button>
             <button id="help-btn" aria-expanded="false" aria-controls="help-panel">How To Play</button>
             <button id="language-btn">English</button>
         </div>
@@ -64,14 +63,27 @@
     <div id="name-modal" class="modal-backdrop" hidden>
         <section class="info-panel modal-panel" role="dialog" aria-modal="true" aria-labelledby="name-modal-title">
             <div class="modal-header">
-                <h2 id="name-modal-title">New High Score</h2>
+                <h2 id="name-modal-title">Save Your Score</h2>
                 <button id="name-close-btn" class="modal-close-btn" type="button" aria-label="Close">×</button>
             </div>
-            <p id="name-modal-text">You made the leaderboard. Enter your name.</p>
+            <p id="name-modal-text">Enter your name to save your score and see your rank. You can also cancel.</p>
             <form id="name-form" class="record-form">
                 <input id="name-input" type="text" maxlength="12" placeholder="Name" autocomplete="nickname">
-                <button id="name-save-btn" type="submit">Save</button>
+                <div class="record-form-actions">
+                    <button id="name-cancel-btn" type="button" class="secondary-btn">Cancel</button>
+                    <button id="name-save-btn" type="submit">Save</button>
+                </div>
             </form>
+        </section>
+    </div>
+    <div id="leaderboard-modal" class="modal-backdrop" hidden>
+        <section class="info-panel modal-panel" role="dialog" aria-modal="true" aria-labelledby="leaderboard-modal-title">
+            <div class="modal-header">
+                <h2 id="leaderboard-modal-title">Leaderboard</h2>
+                <button id="leaderboard-close-btn" class="modal-close-btn" type="button" aria-label="Close">×</button>
+            </div>
+            <p id="leaderboard-modal-text">Your score has been saved.</p>
+            <ol id="leaderboard-modal-list" class="leaderboard-list"></ol>
         </section>
     </div>
     <div id="help-modal" class="modal-backdrop" hidden>

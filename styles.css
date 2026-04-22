@@ -435,10 +435,6 @@ button:disabled {
     background: linear-gradient(180deg, #ff93d0, #ff5a8b);
 }
 
-#save-score-btn {
-    background: linear-gradient(180deg, #ffd36e, #ff8a4a);
-}
-
 #help-btn {
     background: linear-gradient(180deg, #9dff9a, #3ccd74);
 }
@@ -493,6 +489,7 @@ button:disabled {
     display: flex;
     gap: 10px;
     margin-top: 16px;
+    align-items: stretch;
 }
 
 #name-input {
@@ -505,9 +502,69 @@ button:disabled {
     font: inherit;
 }
 
+#name-input::placeholder {
+    color: rgba(248, 241, 215, 0.52);
+}
+
+.record-form-actions {
+    display: flex;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
 #name-save-btn {
     min-width: 120px;
     flex: 0 0 auto;
+}
+
+.secondary-btn {
+    min-width: 120px;
+    flex: 0 0 auto;
+    background: linear-gradient(180deg, rgba(98, 244, 255, 0.28), rgba(30, 59, 67, 0.92));
+}
+
+.leaderboard-list {
+    display: grid;
+    gap: 10px;
+    margin: 18px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.leaderboard-row {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border: 2px solid rgba(98, 244, 255, 0.22);
+    background: rgba(4, 10, 14, 0.58);
+    color: rgba(248, 241, 215, 0.92);
+}
+
+.leaderboard-row.is-current {
+    border-color: rgba(255, 224, 102, 0.7);
+    background:
+        linear-gradient(180deg, rgba(255, 224, 102, 0.14), rgba(4, 10, 14, 0.72)),
+        rgba(4, 10, 14, 0.58);
+    box-shadow: 0 0 0 2px rgba(255, 224, 102, 0.14);
+}
+
+.leaderboard-rank {
+    color: var(--hud-yellow);
+    font-weight: 700;
+}
+
+.leaderboard-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.leaderboard-score {
+    color: var(--hud-cyan);
+    font-weight: 700;
 }
 
 .info-panel h2,
@@ -630,6 +687,24 @@ button:disabled {
 
     .info-panel {
         padding: 16px 14px;
+    }
+
+    .record-form {
+        flex-direction: column;
+    }
+
+    .record-form-actions {
+        width: 100%;
+    }
+
+    .record-form-actions button {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .leaderboard-row {
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        gap: 10px;
     }
 
     button {
