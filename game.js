@@ -82,12 +82,14 @@ let nameModalStatusKey = null;
 let remainingSpecialSpawns = 0;
 let specialSpawnCooldown = 0;
 let specialEnemyIdCounter = 0;
+let scorePopups = [];
 const languageOrder = ['ko', 'zh', 'en'];
 const HIGH_SCORE_STORAGE_KEY = 'webinvader.highscores.v1';
 const MAX_HIGH_SCORES = 5;
 const MAX_PLAYER_NAME_LENGTH = 12;
 const SUPABASE_TABLE_NAME = 'leaderboard_scores';
 const SUPABASE_SUBMIT_SCORE_FUNCTION = 'submit-score';
+const SCORE_POPUP_LIFETIME = 72;
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 ctx.imageSmoothingEnabled = false;
@@ -358,6 +360,57 @@ function mergeHighScoreEntry(entry) {
     return sanitizeHighScoreEntries([...highScores, entry]);
 }
 
+function getSpecialEnemyDefeatScore(stageNumber) {
+    const difficultyBonus = 30 + stageNumber * 8;
+    const durabilityBonus = getSpecialEnemyMaxHealth(stageNumber) * 4;
+    const randomBonusCap = 8 + stageNumber * 4;
+    const randomBonus = Math.floor(Math.random() * (randomBonusCap + 1));
+    const total = difficultyBonus + durabilityBonus + randomBonus;
+    let label = '';
+
+    if (randomBonus >= Math.max(6, Math.floor(randomBonusCap * 0.8))) {
+        label = 'LUCKY SHOT';
+    } else if (stageNumber >= 4 || total >= 105) {
+        label = 'CRITICAL';
+    }
+
+    return {
+        total,
+        randomBonus,
+        label
+    };
+}
+
+function spawnScorePopup(x, y, amount, label = '') {
+    const isLuckyShot = label === 'LUCKY SHOT';
+    const isCritical = label === 'CRITICAL';
+
+    scorePopups.push({
+        x,
+        y,
+        amount,
+        label,
+        life: SCORE_POPUP_LIFETIME,
+        maxLife: SCORE_POPUP_LIFETIME,
+        driftX: (Math.random() - 0.5) * 0.35,
+        driftY: -1.03,
+        color: amount >= 120 ? '#ffe066' : '#62f4ff',
+        labelColor: isLuckyShot ? '#fff4a3' : isCritical ? '#ffd0dc' : '#fff4b3',
+        labelGlow: isLuckyShot ? '#62f4ff' : isCritical ? '#ff5fb7' : '#ff8ac6'
+    });
+}
+
+function updateScorePopups() {
+    scorePopups = scorePopups
+        .map(popup => ({
+            ...popup,
+            x: popup.x + popup.driftX,
+            y: popup.y + popup.driftY,
+            life: popup.life - 1
+        }))
+        .filter(popup => popup.life > 0);
+}
+
 function setNameModalStatus(statusKey = null) {
     nameModalStatusKey = statusKey;
     nameModalTextEl.textContent = getText(statusKey || 'newRecordPrompt');
@@ -504,6 +557,27 @@ function playSound(frequency, duration, type = 'sine') {
     oscillator.stop(audioContext.currentTime + duration);
 }
 
+function playTimedSound(frequency, duration, type = 'sine', volume = 0.18, delay = 0) {
+    if (audioContext.state === 'suspended') return;
+
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    const startTime = audioContext.currentTime + delay;
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.setValueAtTime(frequency, startTime);
+    oscillator.type = type;
+
+    gainNode.gain.setValueAtTime(0.001, startTime);
+    gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.01);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+    oscillator.start(startTime);
+    oscillator.stop(startTime + duration);
+}
+
 function playShootSound() {
     playSound(800, 0.1, 'square');
 }
@@ -517,6 +591,21 @@ function playPlayerExplosionSound() {
     playSound(72, 1.05, 'triangle');
     playSound(210, 0.65, 'sawtooth');
     playSound(320, 0.32, 'square');
+}
+
+function playBonusScoreSound(label) {
+    if (label === 'CRITICAL') {
+        playTimedSound(170, 0.28, 'sawtooth', 0.17, 0);
+        playTimedSound(255, 0.2, 'square', 0.12, 0.05);
+        playTimedSound(410, 0.18, 'triangle', 0.1, 0.12);
+        return;
+    }
+
+    if (label === 'LUCKY SHOT') {
+        playTimedSound(620, 0.14, 'square', 0.12, 0);
+        playTimedSound(840, 0.15, 'triangle', 0.11, 0.06);
+        playTimedSound(1080, 0.2, 'sine', 0.1, 0.13);
+    }
 }
 
 function syncStageControls() {
@@ -867,6 +956,7 @@ function init(startStage = stage) {
     remainingSpecialSpawns = getSpecialSpawnCount(stage);
     specialSpawnCooldown = 150;
     specialEnemyIdCounter = 0;
+    scorePopups = [];
     closeNameModal();
     syncPendingScoreControls();
     syncLanguageUI();
@@ -918,6 +1008,7 @@ function draw() {
     });
 
     enemyBombs.forEach(drawEnemyBomb);
+    drawScorePopups();
 
     if (!gameStarted) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
@@ -1428,11 +1519,14 @@ function drawEnergyBar(x, y, width, progress, color) {
     ctx.fillRect(x + 1, y + 1, Math.max(0, (width - 2) * progress), 4);
 }
 
+function getSpecialEnemyRenderY(enemy) {
+    return enemy.y + Math.sin(frameCount * 0.08 + enemy.bobOffset) * 1.8;
+}
+
 function drawSpecialEnemy(enemy) {
     const config = getStageSpecialConfig(stage);
-    const wobble = Math.sin(frameCount * 0.08 + enemy.bobOffset) * 1.8;
     const x = enemy.x;
-    const y = enemy.y + wobble;
+    const y = getSpecialEnemyRenderY(enemy);
 
     ctx.save();
     ctx.shadowColor = config.glow;
@@ -1477,6 +1571,52 @@ function drawSpecialEnemy(enemy) {
     ctx.fillRect(x + 28, y + 24, 8, 6);
 
     drawEnergyBar(x + 6, y - 10, enemy.width - 12, enemy.health / enemy.maxHealth, config.accent);
+    ctx.restore();
+}
+
+function drawScorePopups() {
+    ctx.save();
+    ctx.textAlign = 'center';
+
+    scorePopups.forEach(popup => {
+        const progress = 1 - popup.life / popup.maxLife;
+        const alpha = progress < 0.5
+            ? 1
+            : Math.max(0, 1 - (progress - 0.5) / 0.5);
+        let amountScale = 1.05;
+        let labelScale = 1.2;
+
+        if (progress < 0.18) {
+            const intro = progress / 0.18;
+            amountScale = 0.75 + intro * 1.25;
+            labelScale = 0.9 + intro * 1.4;
+        } else if (progress < 0.42) {
+            const settle = (progress - 0.18) / 0.24;
+            amountScale = 2 - settle * 0.78;
+            labelScale = 2.3 - settle * 0.95;
+        } else {
+            const fadeSettle = (progress - 0.42) / 0.58;
+            amountScale = 1.22 - fadeSettle * 0.24;
+            labelScale = 1.35 - fadeSettle * 0.28;
+        }
+
+        ctx.globalAlpha = Math.min(1, alpha * 1.15);
+        ctx.shadowColor = popup.color;
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = popup.color;
+        ctx.font = `bold ${Math.round(24 * amountScale)}px "Courier New", monospace`;
+        ctx.fillText(`+${popup.amount}`, popup.x, popup.y);
+
+        if (popup.label) {
+            ctx.globalAlpha = Math.min(1, alpha * 0.95);
+            ctx.shadowColor = popup.labelGlow;
+            ctx.shadowBlur = 16;
+            ctx.fillStyle = popup.labelColor;
+            ctx.font = `bold ${Math.round(16 * labelScale)}px "Courier New", monospace`;
+            ctx.fillText(popup.label, popup.x, popup.y - (24 + labelScale * 6));
+        }
+    });
+
     ctx.restore();
 }
 
@@ -1674,8 +1814,18 @@ function handleBulletCollisions() {
                 playExplosionSound();
 
                 if (enemy.health <= 0) {
+                    const awardedScore = getSpecialEnemyDefeatScore(stage);
                     enemy.alive = false;
-                    score += 50 + stage * 10;
+                    score += awardedScore.total;
+                    spawnScorePopup(
+                        enemy.x + enemy.width / 2,
+                        getSpecialEnemyRenderY(enemy) + enemy.height * 0.35,
+                        awardedScore.total,
+                        awardedScore.label
+                    );
+                    if (awardedScore.label) {
+                        playBonusScoreSound(awardedScore.label);
+                    }
                     updateUI();
                 }
 
@@ -1816,6 +1966,7 @@ function nextStage() {
 
 function gameLoop() {
     if (gameStarted && !paused) {
+        updateScorePopups();
         if (gameOver) {
             updatePlayerExplosion();
         } else {
