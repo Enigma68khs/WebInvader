@@ -51,7 +51,8 @@ const PLAYER_BASE_WIDTH = 50;
 const PLAYER_BASE_HEIGHT = 30;
 const PLAYER_WIDTH = Math.round(PLAYER_BASE_WIDTH * PLAYER_SCALE);
 const PLAYER_HEIGHT = Math.round(PLAYER_BASE_HEIGHT * PLAYER_SCALE);
-const MAX_STAGE = 7;
+const MAX_STAGE = 8;
+const FINAL_BOSS_STAGE = 8;
 
 let player = {
     x: canvas.width / 2 - PLAYER_WIDTH / 2,
@@ -62,6 +63,7 @@ let player = {
 let bullets = [];
 let enemies = [];
 let specialEnemies = [];
+let finalBoss = null;
 let enemyBombs = [];
 let score = 0;
 let stage = 1;
@@ -95,6 +97,8 @@ let remainingSpecialSpawns = 0;
 let specialSpawnCooldown = 0;
 let specialEnemyIdCounter = 0;
 let scorePopups = [];
+let bossFightStartFrame = null;
+let bossDefeatSummary = null;
 const languageOrder = ['ko', 'zh', 'en'];
 const HIGH_SCORE_STORAGE_KEY = 'webinvader.highscores.v1';
 const SCORE_HISTORY_STORAGE_KEY = 'webinvader.score-history.v1';
@@ -162,10 +166,21 @@ const translations = {
         localBoard: '로컬 TOP 5',
         loadingRecords: '불러오는 중...',
         rapidFire: '연속발사',
+        rapidFireLockedBoss: '보스전 단발 고정',
         help: '사용방법',
         gameOver: '게임 오버',
         victory: '승리!',
         restartHint: '다시하기를 눌러주세요',
+        finalBossIncoming: '경고: 거대 우주선 출현',
+        finalBossName: '심판의 모함',
+        bossFastLabel: '광속 격추',
+        bossFastMessage: '순식간에 격추했습니다. 최고 보너스!',
+        bossGreatLabel: '정밀 타격',
+        bossGreatMessage: '아주 빠르게 처리했습니다. 큰 보너스!',
+        bossGoodLabel: '정면 돌파',
+        bossGoodMessage: '안정적으로 격추했습니다.',
+        bossSlowLabel: '간신히 승리',
+        bossSlowMessage: '늦었지만 결국 격추했습니다.',
         newRecordTitle: '점수 기록 저장',
         newRecordPrompt: '이름을 입력하면 점수를 저장하고 현재 순위를 보여줍니다. 원하지 않으면 취소하세요.',
         saveRecordPending: '기록을 저장하는 중입니다...',
@@ -214,10 +229,21 @@ const translations = {
         localBoard: '本地 TOP 5',
         loadingRecords: '正在加载...',
         rapidFire: '连续发射',
+        rapidFireLockedBoss: '首领战仅限单发',
         help: '使用方法',
         gameOver: '游戏结束',
         victory: '胜利！',
         restartHint: '请点击重新开始',
+        finalBossIncoming: '警报：巨型战舰出现',
+        finalBossName: '审判母舰',
+        bossFastLabel: '闪电击坠',
+        bossFastMessage: '你在极短时间内击坠了它，获得最高奖励！',
+        bossGreatLabel: '精准打击',
+        bossGreatMessage: '击坠速度很快，获得高额奖励！',
+        bossGoodLabel: '正面突破',
+        bossGoodMessage: '你稳稳地击坠了它。',
+        bossSlowLabel: '险胜',
+        bossSlowMessage: '虽然花了些时间，但最终还是击坠了它。',
         newRecordTitle: '保存分数',
         newRecordPrompt: '输入名字后会保存分数并显示当前排名。不想输入的话可以取消。',
         saveRecordPending: '正在保存记录...',
@@ -266,10 +292,21 @@ const translations = {
         localBoard: 'Local Top 5',
         loadingRecords: 'Loading...',
         rapidFire: 'Rapid Fire',
+        rapidFireLockedBoss: 'Boss Fight: Single Shot Only',
         help: 'How To Play',
         gameOver: 'Game Over',
         victory: 'Victory!',
         restartHint: 'Press Restart to play again',
+        finalBossIncoming: 'Warning: Giant battleship incoming',
+        finalBossName: 'Judgment Mothership',
+        bossFastLabel: 'LIGHTNING KILL',
+        bossFastMessage: 'You deleted it almost instantly. Maximum bonus.',
+        bossGreatLabel: 'PRECISION STRIKE',
+        bossGreatMessage: 'Fast takedown. Big bonus awarded.',
+        bossGoodLabel: 'FRONTAL BREAK',
+        bossGoodMessage: 'Clean takedown. Solid bonus awarded.',
+        bossSlowLabel: 'LAST SECOND',
+        bossSlowMessage: 'Slow finish, but the mothership is down.',
         newRecordTitle: 'Save Your Score',
         newRecordPrompt: 'Enter your name to save your score and see your rank. You can also cancel.',
         saveRecordPending: 'Saving your record...',
@@ -537,6 +574,24 @@ function getSpecialEnemyDefeatScore(stageNumber) {
     };
 }
 
+function getBossDefeatScore(elapsedFrames) {
+    const elapsedSeconds = elapsedFrames / 60;
+
+    if (elapsedSeconds <= 8) {
+        return { total: 1600, labelKey: 'bossFastLabel', messageKey: 'bossFastMessage' };
+    }
+
+    if (elapsedSeconds <= 14) {
+        return { total: 1200, labelKey: 'bossGreatLabel', messageKey: 'bossGreatMessage' };
+    }
+
+    if (elapsedSeconds <= 22) {
+        return { total: 850, labelKey: 'bossGoodLabel', messageKey: 'bossGoodMessage' };
+    }
+
+    return { total: 500, labelKey: 'bossSlowLabel', messageKey: 'bossSlowMessage' };
+}
+
 function spawnScorePopup(x, y, amount, label = '') {
     const isLuckyShot = label === 'LUCKY SHOT';
     const isCritical = label === 'CRITICAL';
@@ -554,6 +609,10 @@ function spawnScorePopup(x, y, amount, label = '') {
         labelColor: isLuckyShot ? '#fff4a3' : isCritical ? '#ffd0dc' : '#fff4b3',
         labelGlow: isLuckyShot ? '#62f4ff' : isCritical ? '#ff5fb7' : '#ff8ac6'
     });
+}
+
+function isBossPhaseActive() {
+    return Boolean(finalBoss && finalBoss.alive);
 }
 
 function updateScorePopups() {
@@ -893,6 +952,13 @@ function playPlayerExplosionSound() {
     playSound(320, 0.32, 'square');
 }
 
+function playBossExplosionSound() {
+    playTimedSound(62, 1.4, 'sawtooth', 0.28, 0);
+    playTimedSound(92, 1.15, 'triangle', 0.2, 0.05);
+    playTimedSound(180, 0.72, 'square', 0.12, 0.1);
+    playTimedSound(340, 0.28, 'sawtooth', 0.09, 0.18);
+}
+
 function playBonusScoreSound(label) {
     if (label === 'CRITICAL') {
         playTimedSound(170, 0.28, 'sawtooth', 0.17, 0);
@@ -915,6 +981,7 @@ function syncStageControls() {
     startBtn.disabled = !stageControlsEnabled;
     pauseBtn.disabled = !gameStarted || gameOver;
     restartBtn.disabled = !gameStarted || (!paused && !gameOver);
+    rapidFireCheckbox.disabled = isBossPhaseActive();
 }
 
 function playNote(note, startTime, duration, type, volume) {
@@ -1107,6 +1174,21 @@ const stageThemes = [
         shellGlow: 'rgba(255, 110, 110, 0.32)',
         cabinetGlow: 'rgba(255, 180, 90, 0.2)',
         motif: 'storm'
+    },
+    {
+        name: { ko: '황혼 함대', zh: '黄昏舰队', en: 'Dusk Armada' },
+        skyTop: '#060b1d',
+        skyBottom: '#010206',
+        bloom: 'rgba(255, 205, 92, 0.22)',
+        grid: 'rgba(120, 180, 255, 0.14)',
+        glow: 'rgba(255, 205, 92, 0.12)',
+        accent: '#ffd464',
+        detail: '#eaf4ff',
+        shellTop: '#3a425f',
+        shellBottom: '#111522',
+        shellGlow: 'rgba(255, 212, 100, 0.32)',
+        cabinetGlow: 'rgba(120, 180, 255, 0.22)',
+        motif: 'fleet'
     }
 ];
 const stageFormations = [
@@ -1157,6 +1239,13 @@ const stageFormations = [
         '1110110111',
         '1111111111',
         '1101111011',
+        '1111111111'
+    ],
+    [
+        '1111111111',
+        '1110011111',
+        '1111111111',
+        '1110011111',
         '1111111111'
     ]
 ];
@@ -1216,6 +1305,14 @@ const stageSpecialConfigs = [
         glow: 'rgba(255, 110, 110, 0.3)',
         bomb: '#ffc16e',
         style: 'juggernaut'
+    },
+    {
+        name: { ko: '전위 호위기', zh: '前卫护航舰', en: 'Vanguard Escort' },
+        body: '#ffd464',
+        accent: '#eaf4ff',
+        glow: 'rgba(255, 212, 100, 0.3)',
+        bomb: '#ff9f5c',
+        style: 'fortress'
     }
 ];
 let enemyDirection = 1;
@@ -1223,6 +1320,8 @@ const bulletSpeed = 3.25;
 const playerSpeed = 5;
 const specialEnemyWidth = 64;
 const specialEnemyHeight = 44;
+const finalBossWidth = 144;
+const finalBossHeight = 96;
 const bombRadius = 7;
 
 function changeStageSelection(direction) {
@@ -1238,6 +1337,7 @@ function init(startStage = stage) {
     bullets = [];
     enemies = [];
     specialEnemies = [];
+    finalBoss = null;
     enemyBombs = [];
     score = 0;
     stage = startStage;
@@ -1254,6 +1354,8 @@ function init(startStage = stage) {
     pendingScoreSubmission = null;
     leaderboardModalResult = null;
     frameCount = 0;
+    bossFightStartFrame = null;
+    bossDefeatSummary = null;
     remainingSpecialSpawns = getSpecialSpawnCount(stage);
     specialSpawnCooldown = 150;
     specialEnemyIdCounter = 0;
@@ -1307,6 +1409,9 @@ function draw() {
             drawSpecialEnemy(enemy);
         }
     });
+    if (finalBoss?.alive) {
+        drawFinalBoss(finalBoss);
+    }
 
     enemyBombs.forEach(drawEnemyBomb);
     drawScorePopups();
@@ -1338,6 +1443,14 @@ function draw() {
         ctx.fillStyle = '#62f4ff';
         ctx.font = '20px "Courier New", monospace';
         ctx.fillText(getText('restartHint'), canvas.width / 2, canvas.height / 2 + 42);
+        if (gameOverReason === 'victory' && bossDefeatSummary) {
+            ctx.fillStyle = '#ffd464';
+            ctx.font = 'bold 21px "Courier New", monospace';
+            ctx.fillText(`+${bossDefeatSummary.total}  ${getText(bossDefeatSummary.labelKey)}`, canvas.width / 2, canvas.height / 2 + 78);
+            ctx.fillStyle = '#eaf4ff';
+            ctx.font = '16px "Courier New", monospace';
+            ctx.fillText(getText(bossDefeatSummary.messageKey), canvas.width / 2, canvas.height / 2 + 108);
+        }
     }
 }
 
@@ -1365,7 +1478,7 @@ function syncLanguageUI() {
     pauseBtn.textContent = paused ? text.resume : text.pause;
     restartBtn.textContent = text.restart;
     musicBtn.textContent = musicOn ? text.musicOff : text.musicOn;
-    rapidFireLabelEl.textContent = text.rapidFire;
+    rapidFireLabelEl.textContent = isBossPhaseActive() ? text.rapidFireLockedBoss : text.rapidFire;
     rapidFireCheckbox.checked = rapidFireEnabled;
     helpBtn.textContent = text.help;
     languageBtn.textContent = text.languageButton;
@@ -1661,6 +1774,25 @@ function drawThemeMotif(theme) {
         }
     }
 
+    if (theme.motif === 'fleet') {
+        ctx.fillStyle = 'rgba(255, 212, 100, 0.12)';
+        for (let i = 0; i < 5; i++) {
+            const offset = i * 148;
+            ctx.fillRect(50 + offset, 74, 76, 12);
+            ctx.fillRect(66 + offset, 86, 44, 10);
+            ctx.fillRect(82 + offset, 60, 12, 14);
+        }
+
+        ctx.strokeStyle = 'rgba(234, 244, 255, 0.18)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.moveTo(80 + i * 190, 140);
+            ctx.lineTo(150 + i * 190, 210);
+            ctx.stroke();
+        }
+    }
+
     ctx.restore();
 }
 
@@ -1699,7 +1831,19 @@ function drawStageLabel(theme) {
     ctx.fillText(getLocalizedThemeName(theme), 32, 49);
     ctx.fillStyle = 'rgba(248, 241, 215, 0.9)';
     ctx.font = '11px "Courier New", monospace';
-    ctx.fillText(`${getLocalizedSpecialEnemyName(stage)}  HP ${getSpecialEnemyMaxHealth(stage)}  x${getSpecialSpawnCount(stage)}`, 32, 66);
+    const bossIncoming = stage === FINAL_BOSS_STAGE
+        && enemies.every(enemy => !enemy.alive)
+        && specialEnemies.every(enemy => !enemy.alive)
+        && remainingSpecialSpawns === 0
+        && !finalBoss;
+
+    if (isBossPhaseActive()) {
+        ctx.fillText(`${getText('finalBossName')}  HP ${finalBoss.health}/${finalBoss.maxHealth}`, 32, 66);
+    } else if (bossIncoming) {
+        ctx.fillText(getText('finalBossIncoming'), 32, 66);
+    } else {
+        ctx.fillText(`${getLocalizedSpecialEnemyName(stage)}  HP ${getSpecialEnemyMaxHealth(stage)}  x${getSpecialSpawnCount(stage)}`, 32, 66);
+    }
     ctx.restore();
 }
 
@@ -1879,6 +2023,33 @@ function drawSpecialEnemy(enemy) {
     ctx.restore();
 }
 
+function drawFinalBoss(enemy) {
+    const x = enemy.x;
+    const y = enemy.y + Math.sin(frameCount * 0.045) * 4;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 212, 100, 0.4)';
+    ctx.shadowBlur = 22;
+
+    ctx.fillStyle = '#ffd464';
+    ctx.fillRect(x + 56, y, 32, 12);
+    ctx.fillRect(x + 28, y + 12, 88, 18);
+    ctx.fillRect(x + 12, y + 30, 120, 20);
+    ctx.fillRect(x, y + 50, 144, 20);
+    ctx.fillRect(x + 18, y + 70, 32, 18);
+    ctx.fillRect(x + 94, y + 70, 32, 18);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#eaf4ff';
+    ctx.fillRect(x + 30, y + 34, 18, 8);
+    ctx.fillRect(x + 96, y + 34, 18, 8);
+    ctx.fillRect(x + 61, y + 18, 22, 10);
+    ctx.fillRect(x + 66, y + 52, 12, 14);
+
+    drawEnergyBar(x + 12, y - 14, enemy.width - 24, enemy.health / enemy.maxHealth, '#ffd464');
+    ctx.restore();
+}
+
 function drawScorePopups() {
     ctx.save();
     ctx.textAlign = 'center';
@@ -1929,7 +2100,7 @@ function drawEnemyBomb(bomb) {
     ctx.save();
     ctx.fillStyle = bomb.color;
     ctx.beginPath();
-    ctx.arc(bomb.x, bomb.y, bombRadius, 0, Math.PI * 2);
+    ctx.arc(bomb.x, bomb.y, bomb.radius || bombRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = 'rgba(255, 248, 220, 0.7)';
     ctx.beginPath();
@@ -1954,7 +2125,32 @@ function launchEnemyBomb(enemy) {
         y: originY,
         vx: (dx / magnitude) * speed,
         vy: Math.max(1.9, (dy / magnitude) * speed),
-        color: config.bomb
+        color: config.bomb,
+        radius: bombRadius
+    });
+}
+
+function launchFinalBossBombVolley(enemy) {
+    const originX = enemy.x + enemy.width / 2;
+    const originY = enemy.y + enemy.height - 10;
+    const targetX = player.x + player.width / 2;
+    const targetY = player.y + player.height / 2;
+    const dx = targetX - originX;
+    const dy = targetY - originY;
+    const baseAngle = Math.atan2(dy, dx);
+    const speed = getSpecialEnemyBombSpeed(stage) + 0.9;
+    const spreads = [-0.28, 0, 0.28];
+
+    spreads.forEach(spread => {
+        const angle = baseAngle + spread;
+        enemyBombs.push({
+            x: originX,
+            y: originY,
+            vx: Math.cos(angle) * speed,
+            vy: Math.max(2.2, Math.sin(angle) * speed),
+            color: '#ff9f5c',
+            radius: bombRadius + 2
+        });
     });
 }
 
@@ -1978,11 +2174,14 @@ function createBullet(muzzleOffsetX = 0) {
 
 function shootBullet() {
     if (!gameStarted || gameOver || paused) return;
+    if (isBossPhaseActive()) {
+        rapidFireEnabled = false;
+    }
     if (!rapidFireEnabled && !bulletReady) return;
 
     ensureAudioReady();
     bulletReady = false;
-    if (!rapidFireEnabled && stage >= 5) {
+    if (!isBossPhaseActive() && !rapidFireEnabled && stage >= 5) {
         const muzzleOffset = Math.max(8, player.width * 0.2);
         bullets.push(createBullet(-muzzleOffset), createBullet(muzzleOffset));
     } else {
@@ -2138,10 +2337,48 @@ function handleBulletCollisions() {
                 break;
             }
         }
+
+        if (bulletConsumed || !finalBoss || !finalBoss.alive) {
+            continue;
+        }
+
+        if (bullet.x < finalBoss.x + finalBoss.width &&
+            bullet.x + bulletWidth > finalBoss.x &&
+            bullet.y < finalBoss.y + finalBoss.height &&
+            bullet.y + bulletHeight > finalBoss.y) {
+            finalBoss.health -= 1;
+            bullets.splice(bIndex, 1);
+            bulletReady = true;
+            playExplosionSound();
+
+            if (finalBoss.health <= 0) {
+                const defeatScore = getBossDefeatScore(frameCount - bossFightStartFrame);
+                finalBoss.alive = false;
+                bullets = [];
+                enemyBombs = [];
+                score += defeatScore.total;
+                bossDefeatSummary = defeatScore;
+                spawnScorePopup(
+                    finalBoss.x + finalBoss.width / 2,
+                    finalBoss.y + finalBoss.height * 0.35,
+                    defeatScore.total,
+                    getText(defeatScore.labelKey)
+                );
+                ensureAudioReady();
+                playBossExplosionSound();
+                updateUI();
+                gameOver = true;
+                gameOverReason = 'victory';
+                syncStageControls();
+                stopBackgroundMusic();
+                maybePromptScoreSubmission();
+            }
+        }
     }
 }
 
 function updateSpecialEnemies() {
+    if (finalBoss) return;
     maybeSpawnSpecialEnemy();
 
     specialEnemies.forEach(enemy => {
@@ -2163,17 +2400,58 @@ function updateSpecialEnemies() {
     });
 }
 
+function startFinalBossPhase() {
+    specialEnemies = [];
+    enemyBombs = [];
+    remainingSpecialSpawns = 0;
+    rapidFireEnabled = false;
+    bulletReady = true;
+    finalBoss = {
+        x: canvas.width / 2 - finalBossWidth / 2,
+        y: 42,
+        width: finalBossWidth,
+        height: finalBossHeight,
+        health: 36,
+        maxHealth: 36,
+        speed: 1.8,
+        direction: 1,
+        alive: true,
+        fireCooldown: 72
+    };
+    bossFightStartFrame = frameCount;
+    bossDefeatSummary = null;
+    syncLanguageUI();
+}
+
+function updateFinalBoss() {
+    if (!finalBoss || !finalBoss.alive) return;
+
+    finalBoss.x += finalBoss.direction * finalBoss.speed;
+
+    if (finalBoss.x <= 18 || finalBoss.x + finalBoss.width >= canvas.width - 18) {
+        finalBoss.direction *= -1;
+        finalBoss.x = Math.max(18, Math.min(canvas.width - finalBoss.width - 18, finalBoss.x));
+    }
+
+    finalBoss.fireCooldown--;
+    if (finalBoss.fireCooldown <= 0) {
+        launchFinalBossBombVolley(finalBoss);
+        finalBoss.fireCooldown = 56;
+    }
+}
+
 function updateEnemyBombs() {
     for (let i = enemyBombs.length - 1; i >= 0; i--) {
         const bomb = enemyBombs[i];
         bomb.x += bomb.vx;
         bomb.y += bomb.vy;
+        const radius = bomb.radius || bombRadius;
 
         const collidesWithPlayer =
-            bomb.x + bombRadius > player.x &&
-            bomb.x - bombRadius < player.x + player.width &&
-            bomb.y + bombRadius > player.y &&
-            bomb.y - bombRadius < player.y + player.height;
+            bomb.x + radius > player.x &&
+            bomb.x - radius < player.x + player.width &&
+            bomb.y + radius > player.y &&
+            bomb.y - radius < player.y + player.height;
 
         if (collidesWithPlayer) {
             triggerPlayerDefeat();
@@ -2181,9 +2459,9 @@ function updateEnemyBombs() {
         }
 
         if (
-            bomb.y - bombRadius > canvas.height ||
-            bomb.x + bombRadius < 0 ||
-            bomb.x - bombRadius > canvas.width
+            bomb.y - radius > canvas.height ||
+            bomb.x + radius < 0 ||
+            bomb.x - radius > canvas.width
         ) {
             enemyBombs.splice(i, 1);
         }
@@ -2201,6 +2479,7 @@ function update() {
     // 총알 이동
     updateBullets();
     updateSpecialEnemies();
+    updateFinalBoss();
     updateEnemyBombs();
 
     // 적 이동
@@ -2237,18 +2516,24 @@ function update() {
             triggerPlayerDefeat();
         }
     });
+    if (finalBoss?.alive && finalBoss.y + finalBoss.height >= player.y) {
+        triggerPlayerDefeat();
+    }
 
     // 다음 스테이지
     if (
         enemies.every(enemy => !enemy.alive) &&
         specialEnemies.every(enemy => !enemy.alive) &&
+        (!finalBoss || !finalBoss.alive) &&
         remainingSpecialSpawns === 0 &&
         enemyBombs.length === 0
     ) {
-        if (stage < MAX_STAGE) {
+        if (stage < FINAL_BOSS_STAGE) {
             stage++;
             updateUI();
             nextStage();
+        } else if (!finalBoss) {
+            startFinalBossPhase();
         } else if (!gameOver) {
             gameOver = true;
             gameOverReason = 'victory';
@@ -2263,10 +2548,13 @@ function nextStage() {
     applyStageTheme();
     enemies = createEnemiesForStage(stage);
     specialEnemies = [];
+    finalBoss = null;
     enemyBombs = [];
     remainingSpecialSpawns = getSpecialSpawnCount(stage);
     specialSpawnCooldown = 120;
     specialEnemyIdCounter = 0;
+    bossFightStartFrame = null;
+    bossDefeatSummary = null;
 }
 
 function gameLoop() {
@@ -2332,6 +2620,13 @@ musicBtn.addEventListener('click', async () => {
 });
 
 rapidFireCheckbox.addEventListener('change', () => {
+    if (isBossPhaseActive()) {
+        rapidFireEnabled = false;
+        rapidFireCheckbox.checked = false;
+        syncLanguageUI();
+        return;
+    }
+
     rapidFireEnabled = rapidFireCheckbox.checked;
     if (rapidFireEnabled) {
         bulletReady = true;
