@@ -13,7 +13,7 @@ const configuredAllowedOrigins = parseAllowedOrigins(Deno.env.get('ALLOWED_ORIGI
 const allowedOrigins = configuredAllowedOrigins.size > 0
   ? configuredAllowedOrigins
   : new Set([
-      'http://127.0.0.1:5500',
+      'http://127.0.0.1:5500', 
       'http://localhost:5500',
     ])
 const rateLimitStore = new Map<string, number[]>()
