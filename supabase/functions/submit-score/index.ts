@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const TABLE_NAME = 'leaderboard_scores'
 const MAX_NAME_LENGTH = 12
-const MAX_SCORE = 6000
+const MAX_SCORE = 10000
 const MAX_REQUEST_BYTES = 256
 const RATE_LIMIT_WINDOW_MS = 60_000
 const MAX_SUBMISSIONS_PER_WINDOW = 10

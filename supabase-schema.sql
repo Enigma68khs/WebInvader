@@ -5,7 +5,7 @@ create table if not exists public.leaderboard_scores (
         and player_name = btrim(player_name)
         and player_name !~ '[[:cntrl:]]'
     ),
-    score integer not null check (score > 0 and score <= 6000),
+    score integer not null check (score > 0 and score <= 10000),
     created_at timestamptz not null default now()
 );
 
@@ -14,7 +14,7 @@ drop constraint if exists leaderboard_scores_score_check;
 
 alter table public.leaderboard_scores
 add constraint leaderboard_scores_score_check
-check (score > 0 and score <= 6000);
+check (score > 0 and score <= 10000);
 
 alter table public.leaderboard_scores
 drop constraint if exists leaderboard_scores_player_name_check;
