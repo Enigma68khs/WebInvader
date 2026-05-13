@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="game-container">
+    <main id="game-container">
         <div class="cabinet-glow" aria-hidden="true"></div>
         <header id="marquee">
             <div class="marquee-title">BNC Arcade</div>
@@ -59,7 +59,7 @@
             <button id="help-btn" aria-expanded="false" aria-controls="help-panel">How To Play</button>
             <button id="language-btn">English</button>
         </div>
-    </div>
+    </main>
     <div id="name-modal" class="modal-backdrop" hidden>
         <section class="info-panel modal-panel" role="dialog" aria-modal="true" aria-labelledby="name-modal-title">
             <div class="modal-header">
@@ -107,9 +107,9 @@
             </div>
         </section>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
-    <script src="supabase-config.js"></script>
-    <script src="supabase-config.local.js"></script>
-    <script src="game.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous" defer></script>
+    <script src="supabase-config.js" defer></script>
+    <script src="supabase-config.local.js" defer></script>
+    <script src="game.js" defer></script>
 </body>
 </html>
