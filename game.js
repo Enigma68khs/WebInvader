@@ -616,6 +616,15 @@ function isBossPhaseActive() {
 }
 
 function updateScorePopups() {
+    for (let i = scorePopups.length - 1; i >= 0; i--) {
+        const popup = scorePopups[i];
+        popup.x += popup.driftX;
+        popup.y += popup.driftY;
+        popup.life -= 1;
+        if (popup.life <= 0) {
+            scorePopups.splice(i, 1);
+        }
+    }
 }
 
 function setNameModalStatus(statusKey = null) {
