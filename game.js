@@ -616,14 +616,6 @@ function isBossPhaseActive() {
 }
 
 function updateScorePopups() {
-    scorePopups = scorePopups
-        .map(popup => ({
-            ...popup,
-            x: popup.x + popup.driftX,
-            y: popup.y + popup.driftY,
-            life: popup.life - 1
-        }))
-        .filter(popup => popup.life > 0);
 }
 
 function setNameModalStatus(statusKey = null) {
