@@ -6,7 +6,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const outputDir = path.join(rootDir, 'dist');
-const staticFiles = ['index.html', 'styles.css', 'game.js'];
+const staticFiles = [
+  'index.html',
+  'styles.css',
+  'game.js',
+  'about.html',
+  'how-to-play.html',
+  'privacy.html',
+  'terms.html',
+  'contact.html',
+  'ads.txt',
+];
 
 const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
 const supabasePublishableKey = (process.env.SUPABASE_PUBLISHABLE_KEY || '').trim();
