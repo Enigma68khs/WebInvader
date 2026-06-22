@@ -1,24 +1,31 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import {
+  getAllowedOrigins,
+  getClientIp,
+  getCorsHeaders,
+  isAllowedOrigin,
+  isRateLimited,
+  jsonResponse,
+  readJsonBody,
+} from '../_shared/http.ts'
+import { verifySessionToken } from '../_shared/session.ts'
 
 const TABLE_NAME = 'leaderboard_scores'
 const MAX_NAME_LENGTH = 12
+const MAX_STAGE = 8
 const MAX_SCORE = 10000
-const MAX_REQUEST_BYTES = 256
+const MAX_REQUEST_BYTES = 2048
 const RATE_LIMIT_WINDOW_MS = 60_000
 const MAX_SUBMISSIONS_PER_WINDOW = 10
+const MIN_SUBMISSION_ELAPSED_MS = 12_000
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-const configuredAllowedOrigins = parseAllowedOrigins(Deno.env.get('ALLOWED_ORIGINS'))
-const allowedOrigins = configuredAllowedOrigins.size > 0
-  ? configuredAllowedOrigins
-  : new Set([
-      'http://127.0.0.1:5500', 
-      'http://localhost:5500',
-    ])
+const gameSessionSecret = Deno.env.get('GAME_SESSION_SECRET')
+const allowedOrigins = getAllowedOrigins()
 const rateLimitStore = new Map<string, number[]>()
 
-if (!supabaseUrl || !serviceRoleKey) {
+if (!supabaseUrl || !serviceRoleKey || !gameSessionSecret) {
   throw new Error('Missing Supabase function environment variables')
 }
 
@@ -32,52 +39,73 @@ const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
 type SubmissionPayload = {
   playerName?: unknown
   score?: unknown
+  sessionToken?: unknown
+  elapsedMs?: unknown
 }
 
-function parseAllowedOrigins(value: string | undefined) {
-  if (!value) {
-    return new Set<string>()
-  }
-
-  return new Set(
-    value
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean),
-  )
+type InsertedScore = {
+  id: number
+  created_at: string
 }
 
-function getCorsHeaders(origin: string | null): HeadersInit {
-  const headers: Record<string, string> = {
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    Vary: 'Origin',
-  }
-
-  if (origin && allowedOrigins.has(origin)) {
-    headers['Access-Control-Allow-Origin'] = origin
-  }
-
-  return headers
-}
-
-function isAllowedOrigin(origin: string | null) {
-  return Boolean(origin && allowedOrigins.has(origin))
-}
-
-function jsonResponse(
-  status: number,
-  body: Record<string, unknown>,
-  cors: HeadersInit,
-) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...cors,
-      'Content-Type': 'application/json',
-    },
-  })
-}
+const stageFormations = [
+  [
+    '0001111000',
+    '0011111100',
+    '0111111110',
+    '1110011111',
+    '1100000011',
+  ],
+  [
+    '1111111111',
+    '1100000011',
+    '1110110111',
+    '1100000011',
+    '1111111111',
+  ],
+  [
+    '1000000001',
+    '1100000011',
+    '1110000111',
+    '1111001111',
+    '1111111111',
+  ],
+  [
+    '1100110011',
+    '1111111111',
+    '0111111110',
+    '0011111100',
+    '0001111000',
+  ],
+  [
+    '1011001101',
+    '0111111110',
+    '0011111100',
+    '0111111110',
+    '1011001101',
+  ],
+  [
+    '1110011111',
+    '1111111111',
+    '0111111110',
+    '1111111111',
+    '1110011111',
+  ],
+  [
+    '1111111111',
+    '1110110111',
+    '1111111111',
+    '1101111011',
+    '1111111111',
+  ],
+  [
+    '1111111111',
+    '1110011111',
+    '1111111111',
+    '1110011111',
+    '1111111111',
+  ],
+]
 
 function normalizePlayerName(value: unknown) {
   if (typeof value !== 'string') {
@@ -107,36 +135,95 @@ function normalizeScore(value: unknown) {
   return value
 }
 
-function getClientIp(req: Request) {
-  const forwardedFor = req.headers.get('x-forwarded-for')
-  if (forwardedFor) {
-    return forwardedFor.split(',')[0]?.trim() || 'unknown'
+function normalizeElapsedMs(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null
   }
 
-  return req.headers.get('cf-connecting-ip')?.trim() || 'unknown'
+  return Math.max(0, Math.floor(value))
 }
 
-function isRateLimited(clientIp: string, now = Date.now()) {
-  const recentAttempts = (rateLimitStore.get(clientIp) || []).filter(
-    (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS,
-  )
+function getRegularEnemyScore(stageNumber: number) {
+  const formation = stageFormations[stageNumber - 1] || stageFormations[stageFormations.length - 1]
+  return formation.join('').split('').filter((cell) => cell === '1').length * 10
+}
 
-  if (recentAttempts.length >= MAX_SUBMISSIONS_PER_WINDOW) {
-    rateLimitStore.set(clientIp, recentAttempts)
-    return true
+function getSpecialSpawnCount(stageNumber: number) {
+  return Math.min(7, 1 + Math.floor(stageNumber * 0.9))
+}
+
+function getSpecialEnemyMaxHealth(stageNumber: number) {
+  return 2 + stageNumber + Math.floor(stageNumber / 3)
+}
+
+function getMaxSpecialEnemyScore(stageNumber: number) {
+  const difficultyBonus = 30 + stageNumber * 8
+  const durabilityBonus = getSpecialEnemyMaxHealth(stageNumber) * 4
+  const randomBonusCap = 8 + stageNumber * 4
+  return difficultyBonus + durabilityBonus + randomBonusCap
+}
+
+function getMaxScoreForStartStage(startStage: number) {
+  let maxScore = 0
+
+  for (let stage = startStage; stage <= MAX_STAGE; stage++) {
+    maxScore += getRegularEnemyScore(stage)
+    maxScore += getSpecialSpawnCount(stage) * getMaxSpecialEnemyScore(stage)
   }
 
-  recentAttempts.push(now)
-  rateLimitStore.set(clientIp, recentAttempts)
-  return false
+  maxScore += 1600
+  return Math.min(MAX_SCORE, Math.ceil(maxScore * 1.05))
+}
+
+function isPlausibleSubmission(score: number, startStage: number, elapsedMs: number) {
+  if (startStage < 1 || startStage > MAX_STAGE) {
+    return false
+  }
+
+  if (elapsedMs < MIN_SUBMISSION_ELAPSED_MS) {
+    return false
+  }
+
+  return score <= getMaxScoreForStartStage(startStage)
+}
+
+async function getRank(score: number, createdAt: string, id: number) {
+  const [
+    { count: higherCount, error: higherError },
+    { count: earlierTieCount, error: earlierTieError },
+    { count: sameTimeTieCount, error: sameTimeTieError },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from(TABLE_NAME)
+      .select('id', { count: 'exact', head: true })
+      .gt('score', score),
+    supabaseAdmin
+      .from(TABLE_NAME)
+      .select('id', { count: 'exact', head: true })
+      .eq('score', score)
+      .lt('created_at', createdAt),
+    supabaseAdmin
+      .from(TABLE_NAME)
+      .select('id', { count: 'exact', head: true })
+      .eq('score', score)
+      .eq('created_at', createdAt)
+      .lt('id', id),
+  ])
+
+  if (higherError || earlierTieError || sameTimeTieError) {
+    console.error('submit-score rank failed', higherError || earlierTieError || sameTimeTieError)
+    return null
+  }
+
+  return (higherCount ?? 0) + (earlierTieCount ?? 0) + (sameTimeTieCount ?? 0) + 1
 }
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin')
-  const corsHeaders = getCorsHeaders(origin)
+  const corsHeaders = getCorsHeaders(origin, allowedOrigins)
 
   if (req.method === 'OPTIONS') {
-    if (!isAllowedOrigin(origin)) {
+    if (!isAllowedOrigin(origin, allowedOrigins)) {
       return jsonResponse(403, { error: 'Origin not allowed' }, corsHeaders)
     }
 
@@ -147,7 +234,7 @@ Deno.serve(async (req) => {
     return jsonResponse(405, { error: 'Method not allowed' }, corsHeaders)
   }
 
-  if (!isAllowedOrigin(origin)) {
+  if (!isAllowedOrigin(origin, allowedOrigins)) {
     return jsonResponse(403, { error: 'Origin not allowed' }, corsHeaders)
   }
 
@@ -156,42 +243,52 @@ Deno.serve(async (req) => {
     return jsonResponse(415, { error: 'Content-Type must be application/json' }, corsHeaders)
   }
 
-  const contentLengthHeader = req.headers.get('content-length')
-  const contentLength = contentLengthHeader ? Number(contentLengthHeader) : null
-  if (contentLength !== null && Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
-    return jsonResponse(413, { error: 'Request body too large' }, corsHeaders)
-  }
-
   const clientIp = getClientIp(req)
-  if (isRateLimited(clientIp)) {
+  if (isRateLimited(rateLimitStore, clientIp, MAX_SUBMISSIONS_PER_WINDOW, RATE_LIMIT_WINDOW_MS)) {
     return jsonResponse(429, { error: 'Too many submissions. Please try again later.' }, corsHeaders)
   }
 
-  let payload: SubmissionPayload
+  const { data: payload, error: bodyError } = await readJsonBody<SubmissionPayload>(
+    req,
+    MAX_REQUEST_BYTES,
+  )
 
-  try {
-    const rawBody = await req.text()
-    if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BYTES) {
-      return jsonResponse(413, { error: 'Request body too large' }, corsHeaders)
-    }
+  if (bodyError === 'too_large') {
+    return jsonResponse(413, { error: 'Request body too large' }, corsHeaders)
+  }
 
-    payload = JSON.parse(rawBody)
-  } catch {
+  if (bodyError || !payload) {
     return jsonResponse(400, { error: 'Invalid JSON body' }, corsHeaders)
   }
 
   const playerName = normalizePlayerName(payload.playerName)
   const score = normalizeScore(payload.score)
+  const elapsedMs = normalizeElapsedMs(payload.elapsedMs)
+  const sessionToken = typeof payload.sessionToken === 'string' ? payload.sessionToken : ''
+  const session = await verifySessionToken(sessionToken, gameSessionSecret)
+  const now = Date.now()
 
-  if (!playerName || score === null) {
+  if (!playerName || score === null || elapsedMs === null || !session) {
     return jsonResponse(400, { error: 'Invalid score payload' }, corsHeaders)
   }
 
-  const { error } = await supabaseAdmin
+  if (session.expiresAt < now || session.issuedAt > now + 10_000) {
+    return jsonResponse(400, { error: 'Expired game session' }, corsHeaders)
+  }
+
+  if (!isPlausibleSubmission(score, session.startStage, elapsedMs)) {
+    return jsonResponse(400, { error: 'Implausible score payload' }, corsHeaders)
+  }
+
+  const { data: inserted, error } = await supabaseAdmin
     .from(TABLE_NAME)
     .insert([{ player_name: playerName, score }])
+    .select('id, created_at')
+    .single()
 
-  if (error) {
+  const insertedScore = inserted as InsertedScore | null
+
+  if (error || !insertedScore) {
     console.error('submit-score insert failed', error)
     return jsonResponse(500, { error: 'Failed to store score' }, corsHeaders)
   }
@@ -202,6 +299,9 @@ Deno.serve(async (req) => {
       ok: true,
       playerName,
       score,
+      rank: await getRank(score, insertedScore.created_at, insertedScore.id),
+      id: insertedScore.id,
+      createdAt: insertedScore.created_at,
     },
     corsHeaders,
   )

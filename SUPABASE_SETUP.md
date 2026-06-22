@@ -19,31 +19,33 @@ window.WEB_INVADER_SUPABASE_CONFIG = {
 ## 방문자 수 집계 방식
 
 - 상단 점수 박스 오른쪽에 `오늘`과 `전체` 방문자 수가 표시됩니다.
-- 브라우저별로 UUID를 하나 저장하고, 같은 브라우저가 같은 UTC 날짜에 다시 열려도 중복 집계되지 않도록 `site_visits` 테이블의 `(visit_date, visitor_id)` 기본키로 막습니다.
-- 따라서 현재 숫자는 "하루에 한 번만 카운트되는 브라우저 기준 방문자 수"에 가깝습니다.
+- 브라우저는 `site_visits` 테이블에 직접 접근하지 않고 `record-visit` Edge Function만 호출합니다.
+- 함수는 서버 측에서 IP, User-Agent, 날짜, `VISIT_SALT`를 해시해 방문자 ID를 만들고, 같은 UTC 날짜의 중복 집계를 `site_visits` 테이블의 `(visit_date, visitor_id)` 기본키로 막습니다.
+- raw 방문자 ID는 브라우저에 공개하지 않고, 함수는 `{ today, total }` 집계값만 반환합니다.
 
 ## Edge Function 배포
 
-- 브라우저는 더 이상 테이블에 직접 `insert`하지 않고 `submit-score` Edge Function을 호출합니다.
-- 함수 코드는 [supabase/functions/submit-score/index.ts](/Users/enigma68/MyPrograming/CodeStudy/WebInvader/supabase/functions/submit-score/index.ts)에 있습니다.
-- Supabase Dashboard의 Edge Functions 편집기에서 같은 이름의 `submit-score` 함수를 만들고 파일 내용을 붙여넣어 배포하거나, Supabase CLI를 사용한다면 이 저장소 루트에서 배포합니다.
-- 배포 전 [supabase/functions/.env.example](/Users/enigma68/MyPrograming/CodeStudy/WebInvader/supabase/functions/.env.example)를 참고해 `ALLOWED_ORIGINS`를 실제 배포 도메인으로 설정해야 합니다. 이 값에 없는 Origin에서는 점수 저장이 거부됩니다.
+- 브라우저는 점수와 방문 기록을 DB에 직접 쓰지 않고 Edge Function을 호출합니다.
+- 함수 코드는 `supabase/functions/start-game`, `supabase/functions/submit-score`, `supabase/functions/record-visit`에 있습니다.
+- `_shared` 공통 모듈을 함께 배포해야 하므로 Supabase CLI 배포를 권장합니다. Dashboard 편집기를 쓴다면 각 함수와 `supabase/functions/_shared` 파일을 같은 구조로 만들어야 합니다.
+- 배포 전 [supabase/functions/.env.example](/Users/enigma68/MyPrograming/CodeStudy/WebInvader/supabase/functions/.env.example)를 참고해 `ALLOWED_ORIGINS`, `GAME_SESSION_SECRET`, `VISIT_SALT`를 설정해야 합니다. `ALLOWED_ORIGINS`에 없는 Origin에서는 함수 호출이 거부됩니다.
 
 ```bash
+supabase functions deploy start-game
 supabase functions deploy submit-score
+supabase functions deploy record-visit
 ```
 
-- Supabase 공식 문서 기준으로 Edge Function은 기본적으로 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`를 환경변수로 제공받으므로, 이 함수는 추가 비밀키 파일 없이 동작하도록 작성했습니다.
+- Supabase 공식 문서 기준으로 Edge Function은 기본적으로 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`를 환경변수로 제공받습니다. 이 프로젝트는 추가로 `GAME_SESSION_SECRET`을 사용해 게임 세션 토큰을 서명하고, `VISIT_SALT`를 방문자 해시에 사용합니다.
 
 ## 운영 권장사항
 
 - `sb_publishable` 또는 `anon` 키는 프런트엔드에서 사용하도록 설계된 키라서, 브라우저에 전달되는 순간 사용자에게 보입니다. 저장소에서만 숨겨도 런타임에서는 숨길 수 없습니다.
 - 절대로 `service_role` 또는 `sb_secret` 키를 브라우저 코드, 공개 저장소, 정적 파일에 넣으면 안 됩니다. 이 키들은 RLS를 우회할 수 있습니다.
-- 현재 구조는 브라우저가 Edge Function을 호출하고, 함수가 서버 측 `service_role` 키로 점수를 저장하는 방식입니다.
-- 방문자 집계는 정적 사이트에서도 바로 동작하도록 `site_visits` 테이블에 브라우저가 직접 `insert`합니다. 중복은 기본키가 막지만, 악의적인 임의 요청까지 완전히 방지하지는 않습니다.
-- 현재 함수는 허용된 Origin만 통과시키고, 과도한 요청을 줄이기 위해 인스턴스 단위의 간단한 rate limiting을 적용합니다.
-- 이 변경으로 DB 직접 쓰기는 닫았지만, 게임 점수 자체는 여전히 클라이언트에서 만들어지므로 점수 위조를 완전히 막을 수는 없습니다.
-- 실제 서비스로 운영할 경우 현재의 인메모리 제한 외에 Turnstile/CAPTCHA, 영속형 rate limiting, 더 강한 점수 검증 로직을 추가하는 것이 좋습니다.
+- 현재 구조는 브라우저가 `start-game`으로 서명된 게임 세션을 발급받고, `submit-score`가 세션 토큰, 플레이 시간, 점수 상한을 검증한 뒤 서버 측 `service_role` 키로 점수를 저장하는 방식입니다.
+- 방문자 집계도 `record-visit` 함수가 서버 측 `service_role` 키로 처리하므로, 브라우저는 raw 방문자 테이블을 읽거나 쓸 수 없습니다.
+- 현재 함수들은 허용된 Origin만 통과시키고, 과도한 요청을 줄이기 위해 인스턴스 단위의 간단한 rate limiting을 적용합니다.
+- 이 변경으로 DB 직접 쓰기와 단순 임의 제출은 막았지만, 게임 점수 자체는 여전히 클라이언트에서 만들어집니다. 공개 경쟁 서비스로 운영할 경우 Turnstile/CAPTCHA, 영속형 rate limiting, 서버 재현 기반 점수 검증을 추가하는 것이 좋습니다.
 - `score <= 10000` 제약은 현재 8 스테이지 누적 최대 예상 점수(약 9,554점)에 약간 여유를 둔 가드레일입니다. 스테이지 수나 점수 규칙이 바뀌면 함께 조정해야 합니다.
 
 ## GitHub Pages 배포

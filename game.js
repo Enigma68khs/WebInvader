@@ -99,16 +99,17 @@ let specialEnemyIdCounter = 0;
 let scorePopups = [];
 let bossFightStartFrame = null;
 let bossDefeatSummary = null;
+let gameSession = null;
 const languageOrder = ['ko', 'zh', 'en'];
 const HIGH_SCORE_STORAGE_KEY = 'webinvader.highscores.v1';
 const SCORE_HISTORY_STORAGE_KEY = 'webinvader.score-history.v1';
 const VISIT_STATS_STORAGE_KEY = 'webinvader.visit-stats.v1';
-const VISITOR_ID_STORAGE_KEY = 'webinvader.visitor-id.v1';
 const MAX_HIGH_SCORES = 5;
 const MAX_PLAYER_NAME_LENGTH = 12;
 const SUPABASE_TABLE_NAME = 'leaderboard_scores';
+const SUPABASE_START_GAME_FUNCTION = 'start-game';
 const SUPABASE_SUBMIT_SCORE_FUNCTION = 'submit-score';
-const VISIT_COUNTER_TABLE_NAME = 'site_visits';
+const SUPABASE_RECORD_VISIT_FUNCTION = 'record-visit';
 const SCORE_POPUP_LIFETIME = 72;
 let visitStats = loadVisitStats();
 
@@ -452,36 +453,6 @@ function saveVisitStats() {
     }
 }
 
-function generateVisitorId() {
-    if (typeof window.crypto?.randomUUID === 'function') {
-        return window.crypto.randomUUID();
-    }
-
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
-        const random = Math.floor(Math.random() * 16);
-        const value = char === 'x' ? random : (random & 0x3) | 0x8;
-        return value.toString(16);
-    });
-}
-
-function getVisitorId() {
-    try {
-        const existingId = window.localStorage.getItem(VISITOR_ID_STORAGE_KEY);
-        if (existingId) return existingId;
-
-        const newId = generateVisitorId();
-
-        window.localStorage.setItem(VISITOR_ID_STORAGE_KEY, newId);
-        return newId;
-    } catch {
-        return generateVisitorId();
-    }
-}
-
-function getVisitDateString(date = new Date()) {
-    return date.toISOString().slice(0, 10);
-}
-
 function formatCompactNumber(value) {
     if (!Number.isFinite(value)) return '--';
 
@@ -516,6 +487,31 @@ function createSupabaseClient() {
             autoRefreshToken: false
         }
     });
+}
+
+async function startRemoteGameSession(startStage) {
+    gameSession = null;
+
+    if (!supabaseClient) {
+        return;
+    }
+
+    const startedAt = Date.now();
+    const { data, error } = await supabaseClient.functions.invoke(SUPABASE_START_GAME_FUNCTION, {
+        body: {
+            startStage
+        }
+    });
+
+    if (error || typeof data?.sessionToken !== 'string') {
+        return;
+    }
+
+    gameSession = {
+        token: data.sessionToken,
+        startedAt,
+        startStage: Number.isInteger(data.startStage) ? data.startStage : startStage
+    };
 }
 
 function mergeHighScoreEntry(entry) {
@@ -715,9 +711,10 @@ async function refreshHighScores() {
 
     const { data, error } = await supabaseClient
         .from(SUPABASE_TABLE_NAME)
-        .select('player_name, score, created_at')
+        .select('player_name, score, created_at, id')
         .order('score', { ascending: false })
         .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
         .limit(MAX_HIGH_SCORES);
 
     if (error) {
@@ -740,20 +737,6 @@ async function refreshHighScores() {
     renderLeaderboard();
 }
 
-async function fetchRemoteRank(scoreValue) {
-    const { count, error } = await supabaseClient
-        .from(SUPABASE_TABLE_NAME)
-        .select('score', { count: 'exact', head: true })
-        .gt('score', scoreValue);
-
-    if (error) {
-        const visibleIndex = highScores.findIndex(entry => entry.score === scoreValue);
-        return visibleIndex >= 0 ? visibleIndex + 1 : null;
-    }
-
-    return (count ?? 0) + 1;
-}
-
 async function refreshVisitStats() {
     renderVisitStats();
 
@@ -761,37 +744,17 @@ async function refreshVisitStats() {
         return;
     }
 
-    const visitorId = getVisitorId();
-    const visitDate = getVisitDateString();
+    const { data, error } = await supabaseClient.functions.invoke(SUPABASE_RECORD_VISIT_FUNCTION, {
+        body: {}
+    });
 
-    const { error: insertError } = await supabaseClient
-        .from(VISIT_COUNTER_TABLE_NAME)
-        .insert({
-            visit_date: visitDate,
-            visitor_id: visitorId
-        });
-
-    if (insertError && insertError.code !== '23505') {
-        return;
-    }
-
-    const [todayResult, totalResult] = await Promise.all([
-        supabaseClient
-            .from(VISIT_COUNTER_TABLE_NAME)
-            .select('visitor_id', { count: 'exact', head: true })
-            .eq('visit_date', visitDate),
-        supabaseClient
-            .from(VISIT_COUNTER_TABLE_NAME)
-            .select('visitor_id', { count: 'exact', head: true })
-    ]);
-
-    if (todayResult.error || totalResult.error) {
+    if (error) {
         return;
     }
 
     visitStats = {
-        today: todayResult.count ?? null,
-        total: totalResult.count ?? null
+        today: Number.isFinite(data?.today) ? data.today : null,
+        total: Number.isFinite(data?.total) ? data.total : null
     };
     saveVisitStats();
     renderVisitStats();
@@ -804,11 +767,14 @@ async function submitHighScore(entry) {
         score: Math.max(0, Math.floor(entry.score))
     };
 
-    if (supabaseClient) {
-        const { error } = await supabaseClient.functions.invoke(SUPABASE_SUBMIT_SCORE_FUNCTION, {
+    if (supabaseClient && gameSession) {
+        const elapsedMs = Date.now() - gameSession.startedAt;
+        const { data, error } = await supabaseClient.functions.invoke(SUPABASE_SUBMIT_SCORE_FUNCTION, {
             body: {
                 playerName: normalizedEntry.name,
-                score: normalizedEntry.score
+                score: normalizedEntry.score,
+                sessionToken: gameSession.token,
+                elapsedMs
             }
         });
 
@@ -834,7 +800,7 @@ async function submitHighScore(entry) {
         await refreshHighScores();
         return {
             storedRemotely: true,
-            rank: await fetchRemoteRank(normalizedEntry.score),
+            rank: Number.isFinite(data?.rank) ? data.rank : getScoreRank(highScores, normalizedEntry.score),
             entry: normalizedEntry,
             entries: highScores,
             source: 'global'
@@ -1357,6 +1323,7 @@ function init(startStage = stage) {
     frameCount = 0;
     bossFightStartFrame = null;
     bossDefeatSummary = null;
+    gameSession = null;
     remainingSpecialSpawns = getSpecialSpawnCount(stage);
     specialSpawnCooldown = 150;
     specialEnemyIdCounter = 0;
@@ -1369,6 +1336,7 @@ function init(startStage = stage) {
     syncBackgroundMusic();
     syncStageControls();
     enemies = createEnemiesForStage(stage);
+    void startRemoteGameSession(startStage);
 }
 
 function updateUI() {

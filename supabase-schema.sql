@@ -30,6 +30,9 @@ check (
 create index if not exists leaderboard_scores_score_created_idx
 on public.leaderboard_scores (score desc, created_at asc);
 
+create index if not exists leaderboard_scores_score_created_id_idx
+on public.leaderboard_scores (score desc, created_at asc, id asc);
+
 alter table public.leaderboard_scores enable row level security;
 
 drop policy if exists "leaderboard_scores_select_all" on public.leaderboard_scores;
@@ -56,15 +59,6 @@ on public.site_visits (created_at desc);
 alter table public.site_visits enable row level security;
 
 drop policy if exists "site_visits_select_all" on public.site_visits;
-create policy "site_visits_select_all"
-on public.site_visits
-for select
-to anon, authenticated
-using (true);
-
 drop policy if exists "site_visits_insert_all" on public.site_visits;
-create policy "site_visits_insert_all"
-on public.site_visits
-for insert
-to anon, authenticated
-with check (true);
+-- Visits are written and counted through the record-visit Edge Function.
+-- Keep raw visitor identifiers closed to browser clients.

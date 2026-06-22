@@ -26,34 +26,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-      - name: Prepare site artifact
+      - name: Build site artifact
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-        run: |
-          mkdir -p .deploy
-          cp index.html styles.css game.js supabase-config.js .deploy/
+        run: npm run build
 
-          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_PUBLISHABLE_KEY" ]; then
-            cat > .deploy/supabase-config.js <<EOF
-          window.WEB_INVADER_SUPABASE_CONFIG = window.WEB_INVADER_SUPABASE_CONFIG || {
-              url: '${SUPABASE_URL}',
-              anonKey: '${SUPABASE_PUBLISHABLE_KEY}'
-          };
-          EOF
-          fi
-
-          cat > .deploy/supabase-config.local.js <<'EOF'
-          window.WEB_INVADER_SUPABASE_CONFIG = window.WEB_INVADER_SUPABASE_CONFIG || {};
-          EOF
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .deploy
+          path: dist
 
       - name: Deploy to GitHub Pages
         id: deployment
